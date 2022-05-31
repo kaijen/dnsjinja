@@ -25,9 +25,9 @@ class ExploreHetzner:
                 r = response.json()
                 for z in r['zones']:
                     self.out['domains'][z['name']] = {
-                        'zone-id': z['id'],
+                        # 'zone-id': z['id'],
                         'template': "",
-                        'zone-file': ""
+                        # 'zone-file': "",
                     }
             else:
                 print(f'{response.url}: {response.status_code}')
