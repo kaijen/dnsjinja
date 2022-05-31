@@ -1,0 +1,12 @@
+# Dieses Script in ein Verzeichnis in $env:PATH kopieren
+# $venv entsprechend setzen (oder das virtuelle Python mit dem dnsjinja-Modul entsprechen installiert haben)
+# Dann kann das Script genutzt werden, um nicht bei jedem Aufruf die virtuelle Umgebung aktivieren zu müssen
+
+$venv = $env:USERPROFILE + '\.venv\dnsjinja'
+
+$activate = $venv + '\scripts\activate.ps1'
+$argstring = $($args -join " ")
+
+Invoke-Expression $activate
+Invoke-Expression "dnsjinja $argstring"
+Invoke-Expression "deactivate"

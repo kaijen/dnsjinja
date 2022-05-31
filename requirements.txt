@@ -1,0 +1,7 @@
+Jinja2
+requests
+dnspython
+Click
+python-dotenv
+jsonschema
+appdirs
