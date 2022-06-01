@@ -162,7 +162,7 @@ class DNSJinja:
         zones = {}
         for domain, d in self.config["domains"].items():
             template = self.env.get_template(d["template"])
-            zones[domain] = template.render(domain=domain, soa_serial=self._new_zone_serial(domain))
+            zones[domain] = template.render(domain=domain, soa_serial=self._new_zone_serial(domain), **d)
         return zones
 
     def write_zone_files(self) -> None:
