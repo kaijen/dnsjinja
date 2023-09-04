@@ -191,7 +191,8 @@ class DNSJinja:
             if response.status_code == 200:
                 print(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
             else:
-                raise Exception(f'HTTP-Response-Code {response.status_code}')
+                message = json.loads(response.content)['error']['message']
+                raise Exception(f'\nDomain: {domain}\nHTTP-Response-Code: {response.status_code}\nError Message: {message}')
                 # print(f'{domain}: Problem mit HTTP-Request {url}: {response.status_code}')
         except requests.exceptions.RequestException as e:
             print(f'Domäne {domain} konnte bei Hetzner nicht aktualisiert werden: {str(e)}')
