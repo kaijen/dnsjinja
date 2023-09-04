@@ -32,6 +32,11 @@ from .dnsjinja_config_schema import DNSJINJA_JSON_SCHEMA
 
 # TODO Klären warum die Validierung der Konfiguration gegen das Schema nicht fehlschlägt
 
+class UploadError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+        self.msgfmt = message
+
 class DNSJinja:
     
     @staticmethod
@@ -179,23 +184,19 @@ class DNSJinja:
 
     def upload_zone(self, domain: str) -> None:
         url = self.config["global"]["dns-upload-api"].replace("{ZoneID}", self.config['domains'][domain]['zone-id'])
-        try:
-            response = requests.post(
-                url=url,
-                headers={
-                    "Content-Type": "text/plain",
-                    "Auth-API-Token": self.auth_api_token
-                },
-                data=self.zones[domain]
-            )
-            if response.status_code == 200:
-                print(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
-            else:
-                message = json.loads(response.content)['error']['message']
-                raise Exception(f'\nDomain: {domain}\nHTTP-Response-Code: {response.status_code}\nError Message: {message}')
-                # print(f'{domain}: Problem mit HTTP-Request {url}: {response.status_code}')
-        except requests.exceptions.RequestException as e:
-            print(f'Domäne {domain} konnte bei Hetzner nicht aktualisiert werden: {str(e)}')
+        response = requests.post(
+            url=url,
+            headers={
+                "Content-Type": "text/plain",
+                "Auth-API-Token": self.auth_api_token
+            },
+            data=self.zones[domain]
+        )
+        if response.status_code == 200:
+            print(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
+        else:
+            message = json.loads(response.content)['error']['message']
+            raise UploadError(f'\nDomain: {domain}\nHTTP-Response-Code: {response.status_code}\nError Message: {message}')
 
     def upload_zones(self) -> None:
         if not self.upload:
@@ -203,7 +204,11 @@ class DNSJinja:
         if not self.auth_api_token:
             self.auth_api_token = input("Auth-API-Token: ")
         for domain, d in self.config["domains"].items():
-            self.upload_zone(domain)
+            try:
+                self.upload_zone(domain)
+            except UploadError as e:
+                print(f'Domäne {domain} konnte bei Hetzner nicht aktualisiert werden: {str(e)}')
+                continue
 
     def backup_zone(self, domain: str) -> None:
         try:
@@ -258,4 +263,5 @@ def main():
 
 if __name__ == '__main__':
 
+    sys.tracebacklimit = 0
     main()
