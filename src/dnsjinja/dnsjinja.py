@@ -8,34 +8,19 @@ import dns.resolver
 import click
 import sys
 import jsonschema
+import tempfile
 from .myloadenv import load_env
 from .dnsjinja_config_schema import DNSJINJA_JSON_SCHEMA
-
-# TODO Klassen für MagicConfig und MagicEnv mit abstrakter Basisklasse MagicSetupBase
-#      appdirs
-#      python-dotenv
-#      jsonschema
-#      Magische Pfade nutzen, Paramter für *all* oder *first*
-#      So viel Funktionalität wie möglich in der Basisklasse implementieren
-#      Pfade ermitteln und zurückliefern
-#      Environment laden
-#      Environment als JSON (?)
-#      Environment als dict
-#      Config als JSON
-#      Config als dict
-
-# TODO pydantic nutzen
 
 # TODO Mit PyScaffold für pip Installation vorbereiten (aus github/gitlab installieren)
 #      https://stackoverflow.com/questions/4830856/is-it-possible-to-use-pip-to-install-a-package-from-a-private-github-repository
 
 
-# TODO Klären warum die Validierung der Konfiguration gegen das Schema nicht fehlschlägt
-
 class UploadError(Exception):
     def __init__(self, message):
         super().__init__(message)
         self.msgfmt = message
+
 
 class DNSJinja:
     
@@ -81,6 +66,9 @@ class DNSJinja:
     def __init__(self, upload=False, backup=False, write_zone=False, datadir="", config_file="config/config.json", auth_api_token=""):
         self.datadir = DNSJinja._check_dir(datadir, '.', 'Datenverzeichnis')
         self.config_file = DNSJinja._check_dir(config_file, '.', 'Konfigurationsdatei')
+
+        self.exit_status_file = Path(tempfile.gettempdir()) / "dnsjinja.exit.txt"
+        self.exit_status_file.unlink(missing_ok=True)
 
         self.config_schema = DNSJINJA_JSON_SCHEMA
 
@@ -196,6 +184,9 @@ class DNSJinja:
             print(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
         else:
             message = json.loads(response.content)['error']['message']
+            with open(self.exit_status_file, "w", encoding="utf8") as exit_code_file:
+                exit_code_file.write("254")
+
             raise UploadError(f'\nDomain: {domain}\nHTTP-Response-Code: {response.status_code}\nError Message: {message}')
 
     def upload_zones(self) -> None:
@@ -257,6 +248,7 @@ def run(upload, backup, write, datadir, config, auth_api_token):
 
 
 def main():
+    global exit_status
     load_env()
     run()
 
