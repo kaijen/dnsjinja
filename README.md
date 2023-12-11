@@ -11,7 +11,7 @@ Diese Zone-Files sollten genutzt werden, um die DNS-Konfiguration per [Hetzner R
 Es ist empfohlen, dafür eine [virtuelle Python Umgebung](https://realpython.com/python-virtual-environments-a-primer/) zu nutzen. Bei der Installation von `dnsjinja` mit `pip` werden alle benötigten Abhängigkeiten installiert.
 
 Nach Aktivierung der virtuellen Python Umgebung sollte `dnsjinja` dort aus github mit
-` pip install git+ssh://git@github.com:kaijen/dnsjinja.git` oder `pip install git+https://github.com/kaijen/dnsjinja.git` installiert werden. 
+` pip install git+ssh://git@github.com/kaijen/dnsjinja.git` oder `pip install git+https://github.com/kaijen/dnsjinja.git` installiert werden. 
 
 Dabei wird innerhalb der virtuellen Umgebung eine ausführbare Datei erzeugt, über die die Verwaltung der Domänen auf der Kommandozeile mit `dnsjinja` erfolgt.
 
