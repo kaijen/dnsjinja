@@ -178,7 +178,7 @@ class DNSJinja:
                 "Content-Type": "text/plain",
                 "Auth-API-Token": self.auth_api_token
             },
-            data=self.zones[domain]
+            data=bytes(self.zones[domain],"utf-8")
         )
         if response.status_code == 200:
             print(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
