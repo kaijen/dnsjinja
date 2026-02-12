@@ -3,7 +3,7 @@ DNSJINJA_JSON_SCHEMA = {
     "$id": "http://jendrian.eu/schemas/dnsjinijaconfig.json",
     "type": "object",
     "title": "Configuration format for DNSJinja",
-    "description": "Schema to validate config.json files for dns-jinja.py",
+    "description": "Schema to validate config.json files for dns-jinja.py (Hetzner Cloud API)",
     "default": {},
     "examples": [
         {
@@ -11,8 +11,7 @@ DNSJINJA_JSON_SCHEMA = {
                 "zone-files": "zone-files",
                 "zone-backups": "zone-backups",
                 "templates": "templates",
-                "dns-upload-api": "https://dns.hetzner.com/api/v1/zones/{ZoneID}/import",
-                "dns-download-api": "https://dns.hetzner.com/api/v1/zones/{ZoneID}/export",
+                "dns-api-base": "https://api.hetzner.cloud/v1",
                 "name-servers": [
                     "213.133.100.98",
                     "88.198.229.192",
@@ -21,9 +20,7 @@ DNSJINJA_JSON_SCHEMA = {
             },
             "domains": {
                 "secorvo.de": {
-                    "zone-id": "D4Gv7yqGJenJhFk8hTENcb",
-                    "template": "secorvo.de.tpl",
-                    "zone-file": "secorvo.de.zone"
+                    "template": "secorvo.de.tpl"
                 }
             }
         }
@@ -43,9 +40,6 @@ DNSJINJA_JSON_SCHEMA = {
                 "zone-files",
                 "zone-backups",
                 "templates",
-                "dns-upload-api",
-                "dns-download-api",
-                "dns-zones-api",
                 "name-servers"
             ],
             "properties": {
@@ -70,32 +64,14 @@ DNSJINJA_JSON_SCHEMA = {
                     "description": "Location of Jinja2 template files for dns-jinja.py",
                     "default": ""
                 },
-                "dns-upload-api": {
-                    "$id": "#/properties/global/properties/dns-upload-api",
+                "dns-api-base": {
+                    "$id": "#/properties/global/properties/dns-api-base",
                     "type": "string",
                     "format": "uri",
                     "pattern": "^https?://",
-                    "title": "dns-upload-api",
-                    "description": "URL to upload zone data to",
-                    "default": ""
-                },
-                "dns-download-api": {
-                    "$id": "#/properties/global/properties/dns-download-api",
-                    "type": "string",
-                    "format": "uri",
-                    "pattern": "^https?://",
-                    "title": "The dns-download-api",
-                    "description": "URL to download zone data from",
-                    "default": ""
-                },
-                "dns-zones-api": {
-                    "$id": "#/properties/global/properties/dns-zones-api",
-                    "type": "string",
-                    "format": "uri",
-                    "pattern": "^https?://",
-                    "title": "The dns-zones-api",
-                    "description": "URL to download all zones",
-                    "default": ""
+                    "title": "dns-api-base",
+                    "description": "Base URL of the Hetzner Cloud API (default: https://api.hetzner.cloud/v1)",
+                    "default": "https://api.hetzner.cloud/v1"
                 },
                 "name-servers": {
                     "$id": "#/properties/global/properties/name-servers",
@@ -135,22 +111,11 @@ DNSJINJA_JSON_SCHEMA = {
                     "description": "Name of each domain as key",
                     "default": {},
                     "required": [
-                        "template",
-                        "zone-id"
+                        "template"
                     ],
                     "properties": {
-                        "zone-id": {
-                            "$id": "#/properties/domains/properties/secorvo.de/properties/zone-id",
-                            "type": "string",
-                            "title": "zone-id",
-                            "description": "Zone-ID as provided by Hetzner",
-                            "default": "",
-                            "examples": [
-                                "D4Gv7yqGJenJhFk8hTENcb"
-                            ]
-                        },
                         "template": {
-                            "$id": "#/properties/domains/properties/secorvo.de/properties/template",
+                            "$id": "#/properties/domains/properties/domain/properties/template",
                             "type": "string",
                             "title": "template",
                             "description": "Starting template for domain",
@@ -160,7 +125,7 @@ DNSJINJA_JSON_SCHEMA = {
                             ]
                         },
                         "zone-file": {
-                            "$id": "#/properties/domains/properties/secorvo.de/properties/zone-file",
+                            "$id": "#/properties/domains/properties/domain/properties/zone-file",
                             "type": "string",
                             "title": "zone-file",
                             "description": "Output file name for zone-file",

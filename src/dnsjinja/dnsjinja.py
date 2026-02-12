@@ -1,7 +1,7 @@
 from jinja2 import Environment, FileSystemLoader
 from socket import gethostbyname
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 import json
 import dns.resolver
@@ -12,9 +12,6 @@ import tempfile
 from .myloadenv import load_env
 from .dnsjinja_config_schema import DNSJINJA_JSON_SCHEMA
 
-# TODO Mit PyScaffold für pip Installation vorbereiten (aus github/gitlab installieren)
-#      https://stackoverflow.com/questions/4830856/is-it-possible-to-use-pip-to-install-a-package-from-a-private-github-repository
-
 
 class UploadError(Exception):
     def __init__(self, message):
@@ -23,7 +20,9 @@ class UploadError(Exception):
 
 
 class DNSJinja:
-    
+
+    DEFAULT_API_BASE = "https://api.hetzner.cloud/v1"
+
     @staticmethod
     def _check_dir(path_to_check: str, basedir: str, typ: str) -> Path:
         path_to_check = Path(path_to_check)
@@ -34,31 +33,46 @@ class DNSJinja:
             sys.exit(1)
         return path_to_check
 
+    def _api_headers(self, content_type: str = "application/json") -> dict:
+        return {
+            "Authorization": f"Bearer {self.auth_api_token}",
+            "Content-Type": content_type,
+        }
+
     def _prepare_zones(self) -> None:
         try:
-            response = requests.get(
-                url=self.config['global']['dns-zones-api'],
-                headers={
-                    "Auth-API-Token": self.auth_api_token,
-                },
-            )
-            if response.status_code == 200:
-                r = response.json()
-                hetzner_domains = set([z['name'] for z in r['zones']])
-                config_domains = set(self.config['domains'].keys())
-                hetzner_ids = {z['name']: z['id'] for z in r['zones']}
-                for d in (config_domains - hetzner_domains):
-                    print(f'{d} ist konfiguriert aber nicht bei Hetzner eingerichtet - wird ignoriert')
-                    del self.config['domains'][d]
-                for d in (hetzner_domains - config_domains):
-                    print(f'{d} ist bei Hetzner eingerichtet aber nicht konfiguriert - bitte prüfen')
-                for d in self.config['domains'].keys():
-                    self.config['domains'][d]['zone-id'] = hetzner_ids[d]
-                    self.config['domains'][d]['zone-file'] = d + '.zone'
-            else:
-                print(f'{response.url}: {response.status_code}')
-                print('Zonen bei Hetzner konnten nicht ermittelt werden.')
-                sys.exit(1)
+            zones_url = f"{self.api_base}/zones"
+            all_zones = []
+            page = 1
+            while True:
+                response = requests.get(
+                    url=zones_url,
+                    headers=self._api_headers(),
+                    params={"page": page, "per_page": 100},
+                )
+                if response.status_code == 200:
+                    r = response.json()
+                    all_zones.extend(r['zones'])
+                    pagination = r.get('meta', {}).get('pagination', {})
+                    if page >= pagination.get('last_page', page):
+                        break
+                    page += 1
+                else:
+                    print(f'{response.url}: {response.status_code}')
+                    print('Zonen bei Hetzner konnten nicht ermittelt werden.')
+                    sys.exit(1)
+
+            hetzner_domains = set(z['name'] for z in all_zones)
+            config_domains = set(self.config['domains'].keys())
+            hetzner_ids = {z['name']: z['id'] for z in all_zones}
+            for d in (config_domains - hetzner_domains):
+                print(f'{d} ist konfiguriert aber nicht bei Hetzner eingerichtet - wird ignoriert')
+                del self.config['domains'][d]
+            for d in (hetzner_domains - config_domains):
+                print(f'{d} ist bei Hetzner eingerichtet aber nicht konfiguriert - bitte prüfen')
+            for d in self.config['domains'].keys():
+                self.config['domains'][d]['zone-id'] = hetzner_ids[d]
+                self.config['domains'][d]['zone-file'] = d + '.zone'
         except requests.exceptions.RequestException:
             print('Zonen bei Hetzner konnten nicht ermittelt werden.')
             sys.exit(1)
@@ -88,10 +102,11 @@ class DNSJinja:
         self.zone_backups_dir = DNSJinja._check_dir(self.config['global']['zone-backups'], self.datadir, 'Zone-Backup-Verzeichnis')
 
         self.auth_api_token = auth_api_token
+        self.api_base = self.config['global'].get('dns-api-base', self.DEFAULT_API_BASE).rstrip('/')
 
         self._prepare_zones()
 
-        self._today = datetime.utcnow().strftime('%Y%m%d')
+        self._today = datetime.now(timezone.utc).strftime('%Y%m%d')
         self._upload = upload
         self._backup = backup
         self._write_zone = write_zone
@@ -171,19 +186,20 @@ class DNSJinja:
                 print(f'Domäne {domain} konnte nicht geschrieben werden: {str(e)}')
 
     def upload_zone(self, domain: str) -> None:
-        url = self.config["global"]["dns-upload-api"].replace("{ZoneID}", self.config['domains'][domain]['zone-id'])
+        zone_id = self.config['domains'][domain]['zone-id']
+        url = f"{self.api_base}/zones/{zone_id}/actions/import_zonefile"
         response = requests.post(
             url=url,
-            headers={
-                "Content-Type": "text/plain",
-                "Auth-API-Token": self.auth_api_token
-            },
-            data=bytes(self.zones[domain],"utf-8")
+            headers=self._api_headers("text/plain"),
+            data=self.zones[domain].encode("utf-8"),
         )
-        if response.status_code == 200:
+        if response.status_code == 200 or response.status_code == 201:
             print(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
         else:
-            message = json.loads(response.content)['error']['message']
+            try:
+                message = response.json()['error']['message']
+            except (json.JSONDecodeError, KeyError):
+                message = response.text
             with open(self.exit_status_file, "w", encoding="utf8") as exit_code_file:
                 exit_code_file.write("254")
 
@@ -203,14 +219,11 @@ class DNSJinja:
 
     def backup_zone(self, domain: str) -> None:
         try:
-            url = self.config["global"]["dns-download-api"].replace("{ZoneID}", self.config['domains'][domain]['zone-id'])
+            zone_id = self.config['domains'][domain]['zone-id']
+            url = f"{self.api_base}/zones/{zone_id}/zonefile"
             response = requests.get(
                 url=url,
-                headers={
-                    "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-                    "Auth-API-Token": self.auth_api_token
-                },
-                data={}
+                headers=self._api_headers(),
             )
             if response.status_code == 200:
                 backupfile = self.zone_backups_dir / Path(self.config['domains'][domain]['zone-file'] + f'.{self._get_zone_serial(domain)}')
@@ -219,7 +232,6 @@ class DNSJinja:
                 print(f'Domäne {domain} wurde erfolgreich gesichert')
             else:
                 raise Exception(f'HTTP-Response-Code {response.status_code}')
-                # print(f'{domain}: Problem mit HTTP-Request {url}: {response.status_code}')
         except Exception as e:
             print(f'Domäne {domain} konnte nicht gesichert werden: {str(e)}')
 
@@ -238,9 +250,9 @@ class DNSJinja:
 @click.option('-u', '--upload', is_flag=True, default=False, help="Upload der Zonen")
 @click.option('-b', '--backup', is_flag=True, default=False, help="Backup der Zonen")
 @click.option('-w', '--write', is_flag=True, default=False, help="Zone-Files schreiben")
-@click.option('--auth-api-token', default="", envvar='DNSJINJA_AUTH_API_TOKEN', help="AUTH-API-TOKEN für REST-API (DNSJINJA_AUTH_API_TOKEN)")
+@click.option('--auth-api-token', default="", envvar='DNSJINJA_AUTH_API_TOKEN', help="API-Token (Bearer) für Hetzner Cloud API (DNSJINJA_AUTH_API_TOKEN)")
 def run(upload, backup, write, datadir, config, auth_api_token):
-    """Modulare Verwaltung von DNS-Zonen"""
+    """Modulare Verwaltung von DNS-Zonen (Hetzner Cloud API)"""
     dnsjinja = DNSJinja(upload, backup, write, datadir, config, auth_api_token)
     dnsjinja.backup_zones()
     dnsjinja.write_zone_files()
