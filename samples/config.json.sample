@@ -1,0 +1,41 @@
+{
+  "global": {
+    "zone-files": "zone-files",
+    "zone-backups": "zone-backups",
+    "templates": "templates",
+    "dns-upload-api": "https://dns.hetzner.com/api/v1/zones/{ZoneID}/import",
+    "dns-download-api": "https://dns.hetzner.com/api/v1/zones/{ZoneID}/export",
+    "dns-zones-api": "https://dns.hetzner.com/api/v1/zones",
+    "name-servers": [
+      "213.133.100.98",
+      "88.198.229.192",
+      "193.47.99.5"
+    ]
+  },
+  "domains": {
+    "example.com": {
+      "template": "standard.tpl",
+      "mail": "example-provider",
+      "www": "example-provider",
+      "xmpp": "example-provider",
+      "registrar": "Hetzner",
+      "subdomains": [
+        "blog",
+        "dev"
+      ],
+      "custom_groups": [
+        "shared-hosting"
+      ]
+    },
+    "example.org": {
+      "template": "standard.tpl",
+      "mail": "example-provider",
+      "www": "example-provider",
+      "registrar": "Namecheap"
+    },
+    "example.net": {
+      "template": "standard.tpl",
+      "registrar": "GoDaddy"
+    }
+  }
+}
