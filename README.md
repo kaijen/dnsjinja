@@ -3,7 +3,7 @@
 `dnsjinja` ist ein Python-Script, das mit Hilfe von [Jinja](https://palletsprojects.com/p/jinja/) aus modularen
 Template-Dateien Bind9-kompatible Zone-Files erzeugt.
 
-Diese Zone-Files sollten genutzt werden, um die DNS-Konfiguration per [Hetzner REST API](https://dns.hetzner.com/api-docs) bei Hetzner einzuspielen.
+Diese Zone-Files sollten genutzt werden, um die DNS-Konfiguration per [Hetzner Cloud API](https://docs.hetzner.cloud/#dns-zones) bei Hetzner einzuspielen.
 
 ## Installation
 
@@ -22,7 +22,7 @@ Im Repository finden sich im Unterverzeichnis `samples` jeweils ein Beispiel fü
 `dnsjinja` wird mit den benötigten Kommandozeilen-Parameter aufgerufen. Die Konfiguration erfolgt in
 der angegebenen Konfigurationsdatei als [JSON](https://www.json.org/json-en.html) Datenstruktur.
 Im Abschnitt `global` werden die lokalen Pfade für Templates
-und Zone-Files sowie die URLs für den Upload und Backup per REST-API konfiguriert. Im Abschnitt `domains` werden die zu
+und Zone-Files konfiguriert. Im Abschnitt `domains` werden die zu
 bearbeitenden Domains mit Template-Dateien und Ausgabe-Dateien konfiguriert.
 
 Umgebungsvariablen, die in  einer passenden `.env` definiert sind, werden berücksichtigt. Am besten werden die Variablen
@@ -32,7 +32,7 @@ in `$HOME/.dnsjinja/dnsjinja.env` gesetzt.
 > dnsjinja --help
 Usage: dnsjinja [OPTIONS]
 
-  Modulare Verwaltung von DNS-Zonen
+  Modulare Verwaltung von DNS-Zonen (Hetzner Cloud API)
 
 Options:
   -d, --datadir TEXT     Basisverzeichnis für Templates und Konfiguration
@@ -42,11 +42,13 @@ Options:
   -u, --upload           Upload der Zonen
   -b, --backup           Backup der Zonen
   -w, --write            Zone-Files schreiben
-  --auth-api-token TEXT  AUTH-API-TOKEN für REST-API
+  --auth-api-token TEXT  API-Token (Bearer) für Hetzner Cloud API
+                         (DNSJINJA_AUTH_API_TOKEN)
 ```
 
-Das `Auth-Token` für Backup und Upload bei Hetzner wird bei Bedarf abgefragt. Es ist sicher abzulegen, es kann
-bei Hetzner nicht erneut abgefragt werden.
+Das API-Token (Bearer) wird in der [Hetzner Cloud Console](https://console.hetzner.cloud/) im jeweiligen Projekt erstellt.
+Alte `Auth-API-Token` von `dns.hetzner.com` funktionieren nicht mehr.
+Das Token wird bei Bedarf abgefragt und ist sicher abzulegen.
 
 Eine Vorlage für eine `config.json` kann mithilfe von `explore_hetzner` aus einem existieren Hetzner-Account erstellt werden.
 `explore_hetzner` wird bei der Installation mit `pip` ebenfalls erzeugt.
@@ -55,11 +57,13 @@ Eine Vorlage für eine `config.json` kann mithilfe von `explore_hetzner` aus ein
 > explore_hetzner --help
 Usage: explore_hetzner [OPTIONS]
 
-  Expore Hetzner DNS Zones
+  Explore Hetzner DNS Zones (Cloud API)
 
 Options:
   -o, --output FILENAME  Ausgabedatei für die Ergebnisse
-  --auth-api-token TEXT  AUTH-API-TOKEN für REST-API (DNSJINJA_AUTH_API_TOKEN)
+  --auth-api-token TEXT  API-Token (Bearer) für Hetzner Cloud API
+                         (DNSJINJA_AUTH_API_TOKEN)
+  --api-base TEXT        Basis-URL der Hetzner Cloud API (DNSJINJA_API_BASE)
   --help                 Show this message and exit.
 ```
 
@@ -102,15 +106,13 @@ Die Konfiguration erfolgt in einer JSON-Datei mit zwei Abschnitten: `global` und
 
 Der Abschnitt `global` definiert die Infrastruktur-Einstellungen:
 
-| Feld | Beschreibung |
-|------|-------------|
-| `zone-files` | Verzeichnis für erzeugte Zone-Files |
-| `zone-backups` | Verzeichnis für Zone-Backups |
-| `templates` | Verzeichnis für Jinja2-Templates |
-| `dns-upload-api` | URL der Hetzner Upload API (`{ZoneID}` wird ersetzt) |
-| `dns-download-api` | URL der Hetzner Download API (`{ZoneID}` wird ersetzt) |
-| `dns-zones-api` | URL der Hetzner Zonen API |
-| `name-servers` | Liste der Nameserver-IPs für SOA-Abfragen |
+| Feld | Pflicht | Beschreibung |
+|------|---------|-------------|
+| `zone-files` | ja | Verzeichnis für erzeugte Zone-Files |
+| `zone-backups` | ja | Verzeichnis für Zone-Backups |
+| `templates` | ja | Verzeichnis für Jinja2-Templates |
+| `name-servers` | ja | Liste der Nameserver-IPs für SOA-Abfragen |
+| `dns-api-base` | nein | Basis-URL der Hetzner Cloud API (Standard: `https://api.hetzner.cloud/v1`) |
 
 ### Abschnitt `domains`
 
@@ -126,7 +128,7 @@ Jeder Eintrag im Abschnitt `domains` definiert eine zu verwaltende Domain. Der S
 | `subdomains` | nein | Array | Liste der Subdomains, die als eigene Zonen verarbeitet werden |
 | `custom_groups` | nein | Array | Liste gemeinsamer Konfigurationsgruppen |
 
-Die Felder `zone-id` und `zone-file` werden automatisch durch Abgleich mit der Hetzner API befüllt.
+Die Felder `zone-id` und `zone-file` werden automatisch durch Abgleich mit der Hetzner Cloud API befüllt.
 
 Alle konfigurierten Felder werden als Jinja2-Variablen an die Templates übergeben.
 
@@ -138,9 +140,6 @@ Alle konfigurierten Felder werden als Jinja2-Variablen an die Templates übergeb
     "zone-files": "zone-files",
     "zone-backups": "zone-backups",
     "templates": "templates",
-    "dns-upload-api": "https://dns.hetzner.com/api/v1/zones/{ZoneID}/import",
-    "dns-download-api": "https://dns.hetzner.com/api/v1/zones/{ZoneID}/export",
-    "dns-zones-api": "https://dns.hetzner.com/api/v1/zones",
     "name-servers": ["213.133.100.98", "88.198.229.192", "193.47.99.5"]
   },
   "domains": {
@@ -264,7 +263,7 @@ Die Beispiele verwenden ausschließlich abstrakte Daten (`example.com`, `198.51.
 
 ## GitHub Actions
 
-`dnsjinja` kann über GitHub Actions automatisiert werden. Dabei wird ein Workflow im Daten-Repository eingerichtet, der bei jedem Push auf `main` die DNS-Zonen erzeugt und bei Hetzner einspielt:
+`dnsjinja` kann über GitHub Actions automatisiert werden. Dabei wird ein Workflow im Daten-Repository eingerichtet, der bei jedem Push auf `main` die DNS-Zonen erzeugt und über die Hetzner Cloud API einspielt:
 
 1. `dnsjinja` wird aus dem Tool-Repository installiert
 2. Das Daten-Repository wird ausgecheckt
@@ -273,7 +272,7 @@ Die Beispiele verwenden ausschließlich abstrakte Daten (`example.com`, `198.51.
 5. Der Exit-Status wird über `exit_on_error` geprüft
 
 Benötigte GitHub Secrets und Variables:
-- `HETZNER_API_AUTH_TOKEN` (Secret) - API-Token für Hetzner
+- `HETZNER_API_AUTH_TOKEN` (Secret) - Bearer-Token aus Hetzner Cloud Console
 - `GH_PAT_DNSJINJA` (Secret) - GitHub PAT für Installation von dnsjinja aus privatem Repository
 - `DNSJINJA` (Variable) - Repository-Pfad des dnsjinja-Tools
 - `DNSDATA` (Variable) - Repository-Pfad der DNS-Daten

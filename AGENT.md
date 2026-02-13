@@ -2,10 +2,11 @@
 
 ## Project Overview
 
-DNSJinja is a Python CLI tool for managing DNS zones at Hetzner. It uses Jinja2 templates to generate BIND9-compatible zone files and deploys them to Hetzner DNS via their REST API.
+DNSJinja is a Python CLI tool for managing DNS zones at Hetzner. It uses Jinja2 templates to generate BIND9-compatible zone files and deploys them via the Hetzner Cloud API.
 
 - **Language:** Python 3.10+
 - **License:** MIT
+- **Version:** 0.3.0
 - **Package name:** `dnsjinja-kaijen`
 - **Author:** Kai Jendrian
 - **Repository:** https://github.com/kaijen/dnsjinja
@@ -17,9 +18,9 @@ DNSJinja/                                    # Tool repository
 ├── src/dnsjinja/                            # Main package source
 │   ├── __init__.py                          # Package exports (DNSJinja, main, explore_main, exit_on_error)
 │   ├── __main__.py                          # Entry point for `python -m dnsjinja`
-│   ├── dnsjinja.py                          # Core class, CLI, and API operations (~260 lines)
-│   ├── dnsjinja_config_schema.py            # JSON Schema (Draft 7) for config validation (~180 lines)
-│   ├── explore_hetzner.py                   # Hetzner zone discovery utility (~60 lines)
+│   ├── dnsjinja.py                          # Core class, CLI, and Hetzner Cloud API operations (~270 lines)
+│   ├── dnsjinja_config_schema.py            # JSON Schema (Draft 7) for config validation (~145 lines)
+│   ├── explore_hetzner.py                   # Hetzner zone discovery utility (~75 lines)
 │   ├── exit_on_error.py                     # Cross-process exit code handler (~20 lines)
 │   └── myloadenv.py                         # Multi-path .env file loader (~38 lines)
 ├── samples/                                 # Sample configuration and templates
@@ -76,30 +77,34 @@ A complete sample data set is provided in `samples/`.
 
 Contains the `DNSJinja` class with all core logic:
 
+- **`DEFAULT_API_BASE`** - Class constant: `https://api.hetzner.cloud/v1`
 - **`__init__(upload, backup, write_zone, datadir, config_file, auth_api_token)`** - Loads config, validates schema, sets up Jinja2 environment, prepares zones
-- **`_prepare_zones()`** - Syncs configured domains with Hetzner API zones
+- **`_api_headers(content_type)`** - Returns `Authorization: Bearer` and Content-Type headers
+- **`_prepare_zones()`** - Syncs configured domains with Hetzner Cloud API (paginated), auto-populates `zone-id` and `zone-file`
 - **`_get_zone_serial(domain)`** - Queries SOA serial from Hetzner nameservers via dnspython
 - **`_new_zone_serial(domain)`** - Generates SOA serial in `YYYYMMDD##` format (auto-incrementing counter)
 - **`_create_zone_data()`** - Renders all Jinja2 templates into zone file content
 - **`write_zone_files()`** - Writes rendered zones to local files as `{domain}.zone.{serial}`
-- **`upload_zone(domain)` / `upload_zones()`** - POSTs zone data to Hetzner import API
-- **`backup_zone(domain)` / `backup_zones()`** - GETs zone data from Hetzner export API
+- **`upload_zone(domain)`** - POSTs zone data to `{api_base}/zones/{zone_id}/actions/import_zonefile`
+- **`upload_zones()`** - Uploads all configured zones, continues on individual failures
+- **`backup_zone(domain)`** - GETs zone data from `{api_base}/zones/{zone_id}/zonefile`
+- **`backup_zones()`** - Backs up all configured zones
 
-Custom exception: `UploadError` - raised on upload failure (HTTP != 200), writes exit code 254 to temp file.
+Custom exception: `UploadError` - raised on upload failure (HTTP != 200/201), writes exit code 254 to temp file.
 
 CLI function `run()` uses Click with options for `--datadir`, `--config`, `--upload`, `--backup`, `--write`, `--auth-api-token`.
 
 ### `dnsjinja_config_schema.py` - Config Schema
 
 Defines `DNSJINJA_JSON_SCHEMA` (JSON Schema Draft 7) with two sections:
-- **`global`**: `zone-files`, `zone-backups`, `templates` (directories), `dns-upload-api`, `dns-download-api`, `dns-zones-api` (URIs), `name-servers` (IPv4 array)
-- **`domains`**: Object keyed by domain name, each with `template` (required), `zone-id` (required), `zone-file` (optional)
+- **`global`** (required fields): `zone-files`, `zone-backups`, `templates` (directories), `name-servers` (IPv4 array). Optional: `dns-api-base` (URI, defaults to `https://api.hetzner.cloud/v1`)
+- **`domains`**: Object keyed by domain name, each with `template` (required), `zone-file` (optional). Additional properties allowed for template variables.
 
-Note: `zone-id` and `zone-file` are auto-populated by `_prepare_zones()` from the Hetzner API at runtime.
+Note: `zone-id` and `zone-file` are auto-populated by `_prepare_zones()` from the Hetzner Cloud API at runtime.
 
 ### `explore_hetzner.py` - Zone Discovery
 
-`ExploreHetzner` class fetches all zones from Hetzner API and outputs a JSON config template. Useful for initial project setup.
+`ExploreHetzner` class fetches all zones from the Hetzner Cloud API (with pagination) and outputs a JSON config template. Accepts optional `api_base` parameter. Useful for initial project setup.
 
 ### `myloadenv.py` - Environment Loader
 
@@ -114,7 +119,7 @@ Reads exit code from `{tempdir}/dnsjinja.exit.txt` and calls `sys.exit()` with t
 | Package | Purpose |
 |---------|---------|
 | Jinja2 | Template rendering for zone files |
-| requests | HTTP client for Hetzner REST API |
+| requests | HTTP client for Hetzner Cloud API |
 | dnspython | DNS resolver for SOA serial queries |
 | Click | CLI framework with env var support |
 | python-dotenv | .env file loading |
@@ -140,14 +145,15 @@ Reads exit code from `{tempdir}/dnsjinja.exit.txt` and calls `sys.exit()` with t
 | `-u`, `--upload` | `False` | - | Upload zones to Hetzner |
 | `-b`, `--backup` | `False` | - | Backup zones from Hetzner |
 | `-w`, `--write` | `False` | - | Write zone files locally |
-| `--auth-api-token` | `""` | `DNSJINJA_AUTH_API_TOKEN` | Hetzner API token |
+| `--auth-api-token` | `""` | `DNSJINJA_AUTH_API_TOKEN` | Bearer token for Hetzner Cloud API |
 
 ### `explore_hetzner` Options
 
 | Option | Default | Env Var | Description |
 |--------|---------|---------|-------------|
 | `-o`, `--output` | stdout | - | Output file for results |
-| `--auth-api-token` | `""` | `DNSJINJA_AUTH_API_TOKEN` | Hetzner API token |
+| `--auth-api-token` | `""` | `DNSJINJA_AUTH_API_TOKEN` | Bearer token for Hetzner Cloud API |
+| `--api-base` | `""` | `DNSJINJA_API_BASE` | Base URL of Hetzner Cloud API |
 
 ## Configuration Format
 
@@ -169,6 +175,16 @@ The `config.json` has two sections: `global` (infrastructure settings) and `doma
 
 All domain config fields are passed to templates as Jinja2 variables via `**kwargs`.
 
+### Global Section Fields
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `zone-files` | yes | - | Directory for generated zone files |
+| `zone-backups` | yes | - | Directory for zone backups |
+| `templates` | yes | - | Directory for Jinja2 templates |
+| `name-servers` | yes | - | IPv4 addresses for SOA serial queries |
+| `dns-api-base` | no | `https://api.hetzner.cloud/v1` | Base URL of the Hetzner Cloud API |
+
 ### Example
 
 ```json
@@ -177,9 +193,6 @@ All domain config fields are passed to templates as Jinja2 variables via `**kwar
     "zone-files": "zone-files",
     "zone-backups": "zone-backups",
     "templates": "templates",
-    "dns-upload-api": "https://dns.hetzner.com/api/v1/zones/{ZoneID}/import",
-    "dns-download-api": "https://dns.hetzner.com/api/v1/zones/{ZoneID}/export",
-    "dns-zones-api": "https://dns.hetzner.com/api/v1/zones",
     "name-servers": ["213.133.100.98", "88.198.229.192", "193.47.99.5"]
   },
   "domains": {
@@ -198,15 +211,31 @@ All domain config fields are passed to templates as Jinja2 variables via `**kwar
 
 See `samples/config.json.sample` for a complete example with multiple domain configurations.
 
+## Hetzner Cloud API
+
+DNSJinja uses the Hetzner Cloud API (`https://api.hetzner.cloud/v1`) with Bearer token authentication.
+
+### API Endpoints Used
+
+| Operation | Method | Endpoint |
+|-----------|--------|----------|
+| List zones | GET | `{api_base}/zones` (paginated) |
+| Import zone | POST | `{api_base}/zones/{zone_id}/actions/import_zonefile` |
+| Export zone | GET | `{api_base}/zones/{zone_id}/zonefile` |
+
+### Authentication
+
+All requests use `Authorization: Bearer <token>` header. The API token is created in the Hetzner Cloud Console (not the old dns.hetzner.com portal).
+
 ## Workflow
 
 The main CLI executes three phases in order (each gated by its flag):
 
-1. **Backup** (`-b`): Downloads current zones from Hetzner export API, saves as `{zone-file}.{serial}` in `zone-backups/`
+1. **Backup** (`-b`): Downloads current zones from Hetzner Cloud API, saves as `{zone-file}.{serial}` in `zone-backups/`
 2. **Write** (`-w`): Renders Jinja2 templates for each domain, writes as `{zone-file}.{serial}` in `zone-files/`
-3. **Upload** (`-u`): POSTs rendered zone content to Hetzner import API for each domain
+3. **Upload** (`-u`): POSTs rendered zone content to Hetzner Cloud API for each domain
 
-On initialization, `_prepare_zones()` always runs to sync configured domains against Hetzner's zone list and warn about mismatches.
+On initialization, `_prepare_zones()` always runs to sync configured domains against Hetzner's zone list (with pagination) and warn about mismatches.
 
 ## Template Architecture
 
@@ -305,6 +334,5 @@ Required GitHub secrets/variables:
 
 - No unit/integration tests
 - No Docker support (planned)
-- Planned migration to Hetzner Cloud API (from current DNS API)
 - Templates stored in separate external repository
 - German-only user interface
