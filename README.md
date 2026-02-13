@@ -17,6 +17,81 @@ Dabei wird innerhalb der virtuellen Umgebung eine ausführbare Datei erzeugt, ü
 
 Im Repository finden sich im Unterverzeichnis `samples` jeweils ein Beispiel für eine Datei mit Umgebungsvariablen, die von `dnsjinja` verwendet werden können und für ein Powershell-Script, dass die Nutzung vereinfacht indem die virtuelle Umgebung im Script aktiviert und deaktiviert wird.
 
+### Virtuelle Python-Umgebung
+
+Einrichtung einer virtuellen Umgebung:
+
+```bash
+python -m venv .venv
+```
+
+Aktivierung:
+
+```bash
+# Linux / macOS
+source .venv/bin/activate
+
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+```
+
+Installation von `dnsjinja` in der aktivierten Umgebung:
+
+```bash
+pip install git+ssh://git@github.com/kaijen/dnsjinja.git
+```
+
+Anschließend stehen die Kommandos `dnsjinja`, `explore_hetzner` und `exit_on_error` zur Verfügung.
+
+Die Umgebungsvariablen können in `$HOME/.dnsjinja/dnsjinja.env` konfiguriert werden (siehe `samples/dnsjinja.env.sample`). Ein Beispiel für ein PowerShell-Wrapper-Script findet sich in `samples/dnsjinja.ps1.sample`.
+
+### Docker
+
+`dnsjinja` kann alternativ über Docker ausgeführt werden. Das Dockerfile nutzt ein Multi-Stage-Build mit zwei Targets:
+
+- **`prod`** - Produktions-Container mit installiertem `dnsjinja`
+- **`dev`** - Entwicklungs-Container mit `pip install -e .` (editierbare Installation)
+
+#### Mit docker-compose
+
+Das Daten-Repository (Templates, Config, Zone-Files) wird als Volume eingebunden. Die Umgebungsvariable `DNSJINJA_DATADIR` muss auf dem Host auf das Daten-Repository zeigen:
+
+```bash
+# Backup, Write und Upload ausführen
+DNSJINJA_AUTH_API_TOKEN=<token> DNSJINJA_DATADIR=/pfad/zum/daten-repo \
+  docker compose run --rm dnsjinja -b -w -u
+
+# Entwicklungs-Container (Source-Code wird live gemountet)
+DNSJINJA_AUTH_API_TOKEN=<token> DNSJINJA_DATADIR=/pfad/zum/daten-repo \
+  docker compose run --rm dnsjinja-dev -b -w -u
+```
+
+#### Mit docker build/run
+
+```bash
+# Image bauen (Produktion)
+docker build --target prod -t dnsjinja .
+
+# Image bauen (Entwicklung)
+docker build --target dev -t dnsjinja-dev .
+
+# Ausführen mit Volume-Mount
+docker run --rm \
+  -v /pfad/zum/daten-repo:/data \
+  -e DNSJINJA_AUTH_API_TOKEN=<token> \
+  -e DNSJINJA_DATADIR=/data \
+  -e DNSJINJA_CONFIG=/data/config/config.json \
+  dnsjinja -b -w -u
+```
+
+#### explore_hetzner im Container
+
+Da der ENTRYPOINT auf `dnsjinja` gesetzt ist, kann `explore_hetzner` über `--entrypoint` aufgerufen werden:
+
+```bash
+docker compose run --rm --entrypoint explore_hetzner dnsjinja --auth-api-token <token>
+```
+
 ## Benutzung
 
 `dnsjinja` wird mit den benötigten Kommandozeilen-Parameter aufgerufen. Die Konfiguration erfolgt in

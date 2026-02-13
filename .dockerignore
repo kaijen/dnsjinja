@@ -1,0 +1,13 @@
+.git
+.gitignore
+*.egg-info
+__pycache__
+venv/
+.venv/
+.env
+*.env
+.idea/
+.aider*
+build/
+dist/
+_tmp_*

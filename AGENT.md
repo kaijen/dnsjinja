@@ -318,6 +318,38 @@ Required GitHub secrets/variables:
 - `DNSJINJA` (var) - Repository path for dnsjinja tool
 - `DNSDATA` (var) - Repository path for DNS data
 
+## Docker
+
+Multi-stage `Dockerfile` with two targets, managed via `docker-compose.yml`.
+
+### Targets
+
+| Target | Install | Use Case |
+|--------|---------|----------|
+| `prod` | `pip install .` | Production: run dnsjinja against a volume-mounted data repo |
+| `dev` | `pip install -e .` | Development: editable install with live source mount |
+
+Base image: `python:3.12-slim`. Working directory: `/data` (mount point for data repo).
+
+### docker-compose Services
+
+| Service | Target | Extra Volumes |
+|---------|--------|---------------|
+| `dnsjinja` | prod | `${DNSJINJA_DATADIR}:/data` |
+| `dnsjinja-dev` | dev | `${DNSJINJA_DATADIR}:/data`, `./src:/app/src` |
+
+Usage: `docker compose run --rm dnsjinja -b -w -u`
+
+### Environment Variables in Container
+
+| Variable | Value in Container | Source |
+|----------|-------------------|--------|
+| `DNSJINJA_AUTH_API_TOKEN` | passed from host | `docker -e` or compose `environment:` |
+| `DNSJINJA_DATADIR` | `/data` | set in compose |
+| `DNSJINJA_CONFIG` | `/data/config/config.json` | set in compose |
+
+The `ENTRYPOINT` is `dnsjinja`. To run `explore_hetzner`, use `--entrypoint explore_hetzner`.
+
 ## Coding Conventions
 
 - **Naming:** `snake_case` for functions/methods, `CamelCase` for classes
@@ -333,6 +365,5 @@ Required GitHub secrets/variables:
 ## Known Limitations & TODOs
 
 - No unit/integration tests
-- No Docker support (planned)
 - Templates stored in separate external repository
 - German-only user interface

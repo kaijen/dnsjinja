@@ -1,0 +1,23 @@
+services:
+  dnsjinja:
+    build:
+      context: .
+      target: prod
+    volumes:
+      - ${DNSJINJA_DATADIR:-.}:/data
+    environment:
+      - DNSJINJA_AUTH_API_TOKEN
+      - DNSJINJA_DATADIR=/data
+      - DNSJINJA_CONFIG=/data/config/config.json
+
+  dnsjinja-dev:
+    build:
+      context: .
+      target: dev
+    volumes:
+      - ${DNSJINJA_DATADIR:-.}:/data
+      - ./src:/app/src
+    environment:
+      - DNSJINJA_AUTH_API_TOKEN
+      - DNSJINJA_DATADIR=/data
+      - DNSJINJA_CONFIG=/data/config/config.json
