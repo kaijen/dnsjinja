@@ -261,6 +261,20 @@ Im Unterverzeichnis `samples/` findet sich ein vollständiger Beispiel-Datensatz
 
 Die Beispiele verwenden ausschließlich abstrakte Daten (`example.com`, `198.51.100.x` etc.) und können als Ausgangspunkt für eine eigene Konfiguration dienen.
 
+## Hetzner Cloud API
+
+`dnsjinja` nutzt die [Hetzner Cloud API](https://docs.hetzner.cloud/#dns-zones) mit Bearer-Token-Authentifizierung. Die Basis-URL (`https://api.hetzner.cloud/v1`) kann über `dns-api-base` in der Konfiguration oder die Umgebungsvariable `DNSJINJA_API_BASE` überschrieben werden.
+
+Verwendete Endpunkte:
+
+| Endpunkt | Methode | Beschreibung |
+|----------|---------|--------------|
+| `{dns-api-base}/zones` | GET | Zonen auflisten (paginiert, 100 pro Seite) |
+| `{dns-api-base}/zones/{zone-id}/actions/import_zonefile` | POST | Zone-File importieren (Upload) |
+| `{dns-api-base}/zones/{zone-id}/zonefile` | GET | Zone-File exportieren (Backup) |
+
+Die Authentifizierung erfolgt über den HTTP-Header `Authorization: Bearer {token}`. Der Token wird über die Hetzner Cloud Console erstellt (nicht der alte Auth-API-Token von dns.hetzner.com).
+
 ## GitHub Actions
 
 `dnsjinja` kann über GitHub Actions automatisiert werden. Dabei wird ein Workflow im Daten-Repository eingerichtet, der bei jedem Push auf `main` die DNS-Zonen erzeugt und über die Hetzner Cloud API einspielt:
