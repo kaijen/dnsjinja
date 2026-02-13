@@ -92,6 +92,57 @@ Da der ENTRYPOINT auf `dnsjinja` gesetzt ist, kann `explore_hetzner` über `--en
 docker compose run --rm --entrypoint explore_hetzner dnsjinja --auth-api-token <token>
 ```
 
+#### PowerShell-Funktionen für `$PROFILE`
+
+Die folgenden Funktionen kapseln die Docker-Aufrufe und können in das PowerShell-Profil (`$PROFILE`) eingebunden werden. Die Umgebungsvariablen `DNSJINJA_AUTH_API_TOKEN` und `DNSJINJA_DATADIR` müssen gesetzt sein (z.B. über `$HOME/.dnsjinja/dnsjinja.env` oder direkt in `$PROFILE`).
+
+```powershell
+# Pfad zum DNSJinja-Repository (anpassen, falls nicht als Umgebungsvariable gesetzt)
+if (-not $env:DNSJINJA_COMPOSE) { $env:DNSJINJA_COMPOSE = "D:\github-kaijen\DNSJinja" }
+
+function Invoke-DNSJinja {
+    <#
+    .SYNOPSIS
+        Führt dnsjinja im Docker-Container aus.
+    .EXAMPLE
+        Invoke-DNSJinja -b -w -u
+        Invoke-DNSJinja --backup --write
+    #>
+    docker compose -f "$env:DNSJINJA_COMPOSE\docker-compose.yml" run --rm dnsjinja @args
+}
+
+function Invoke-DNSJinjaDev {
+    <#
+    .SYNOPSIS
+        Führt dnsjinja im Entwicklungs-Container aus (Source live gemountet).
+    .EXAMPLE
+        Invoke-DNSJinjaDev -b -w -u
+    #>
+    docker compose -f "$env:DNSJINJA_COMPOSE\docker-compose.yml" run --rm dnsjinja-dev @args
+}
+
+function Invoke-ExploreHetzner {
+    <#
+    .SYNOPSIS
+        Führt explore_hetzner im Docker-Container aus.
+    .EXAMPLE
+        Invoke-ExploreHetzner -o config.json
+    #>
+    docker compose -f "$env:DNSJINJA_COMPOSE\docker-compose.yml" run --rm --entrypoint explore_hetzner dnsjinja @args
+}
+
+Set-Alias -Name dnsjinja -Value Invoke-DNSJinja
+Set-Alias -Name dnsjinja-dev -Value Invoke-DNSJinjaDev
+Set-Alias -Name explore-hetzner -Value Invoke-ExploreHetzner
+```
+
+Damit lässt sich `dnsjinja` direkt auf der Kommandozeile nutzen:
+
+```powershell
+dnsjinja -b -w -u
+explore-hetzner -o config.json
+```
+
 ## Benutzung
 
 `dnsjinja` wird mit den benötigten Kommandozeilen-Parameter aufgerufen. Die Konfiguration erfolgt in
