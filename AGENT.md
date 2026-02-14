@@ -28,8 +28,13 @@ DNSJinja/                                    # Tool repository
 │   ├── dnsjinja.ps1.sample                  # PowerShell wrapper script
 │   ├── config.json.sample                   # Full sample configuration
 │   └── templates/                           # Sample template set (see Template Architecture)
+├── tests/                                   # Test suite (pytest)
+│   ├── __init__.py
+│   ├── conftest.py                          # Fixtures, .env loading, mock helpers
+│   ├── test_unit.py                         # 19 unit tests (fully mocked, no network)
+│   └── test_integration.py                  # 8 integration tests (real Hetzner API)
 ├── setup.cfg                                # Package metadata, dependencies, entry points
-├── pyproject.toml                           # Build system configuration (setuptools)
+├── pyproject.toml                           # Build system + pytest configuration
 ├── requirements.txt                         # Pip dependencies
 ├── README.md                                # Documentation (German)
 └── TODO.md                                  # Planned improvements
@@ -363,10 +368,55 @@ The `ENTRYPOINT` is `dnsjinja`. To run `explore_hetzner`, use `--entrypoint expl
 - **Traceback suppression:** `sys.tracebacklimit = 0` in `__main__.py` for clean user output
 - **No type hints** used in the codebase
 - **No logging framework** - uses `print()` for all output
-- **No tests** - no test suite exists
+- **Tests:** pytest with `unittest.mock` (no extra mock library); unit tests fully isolated, integration tests require env vars
+
+## Testing
+
+### Unit Tests (no network required)
+
+```bash
+pip install -e ".[test]"
+pytest tests/test_unit.py -v
+```
+
+All Hetzner API calls and DNS queries are mocked via `unittest.mock`. The fixture `data_dir` creates a temporary directory with a minimal `test.tpl` template. `mock_client` patches `dnsjinja.dnsjinja.Client`; `mock_dns_resolver` patches `dns.resolver.Resolver`.
+
+Covered areas:
+
+| Class | What is tested |
+|-------|---------------|
+| `TestPrepareZones` | Zone sync, `--create-missing`, API errors, extra Hetzner zones |
+| `TestUploadZone` | Success path, failure → exit code 254, continues on partial failure |
+| `TestBackupZone` | File written, filename contains serial, API error handling |
+| `TestWriteZoneFiles` | File creation, disabled mode |
+| `TestZoneSerial` | Increment on same day, reset to 01 on new day, format |
+
+### Integration Tests (requires Hetzner API)
+
+```bash
+export DNSJINJA_AUTH_API_TOKEN=<token>   # Bearer token from Hetzner Cloud Console
+export DNSJINJA_TEST_DOMAIN=<domain>     # Must already exist as primary zone at Hetzner
+pytest tests/test_integration.py -m integration -v
+```
+
+Or via `.env` / `$HOME/.dnsjinja/dnsjinja.env`. Integration tests are skipped automatically when env vars are not set.
+
+> **Note:** `TestUpload::test_upload_erfolgreich` replaces all DNS records of the test domain with a minimal zone file. Use a dedicated test domain.
+
+### conftest.py – Key Fixtures
+
+| Fixture | Scope | Description |
+|---------|-------|-------------|
+| `api_token` | session | `DNSJINJA_AUTH_API_TOKEN` env var |
+| `test_domain` | session | `DNSJINJA_TEST_DOMAIN` env var |
+| `require_api_token` | session | Skip test if token not set |
+| `require_test_domain` | session | Skip test if domain not set |
+| `data_dir` | function | `tmp_path` with config/, templates/, zone-files/, zone-backups/ |
+| `config_file` | function | `config.json` with `example.com` |
+| `mock_client` | function | Patches `dnsjinja.dnsjinja.Client` |
+| `mock_dns_resolver` | function | Patches `dns.resolver.Resolver`, returns serial `2026020101` |
 
 ## Known Limitations & TODOs
 
-- No unit/integration tests
 - Templates stored in separate external repository
 - German-only user interface

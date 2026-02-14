@@ -143,6 +143,46 @@ dnsjinja -b -w -u
 explore-hetzner -o config.json
 ```
 
+## Entwicklung & Tests
+
+### Testabhängigkeiten installieren
+
+```bash
+pip install -e ".[test]"
+```
+
+### Unit-Tests ausführen
+
+Die Unit-Tests benötigen keine Netzwerkverbindung – alle Hetzner-API-Aufrufe und DNS-Abfragen sind gemockt:
+
+```bash
+pytest tests/test_unit.py -v
+```
+
+### Integrationstests ausführen
+
+Die Integrationstests kommunizieren mit der echten Hetzner Cloud API. Folgende Umgebungsvariablen müssen gesetzt sein:
+
+| Variable | Beschreibung |
+|----------|-------------|
+| `DNSJINJA_AUTH_API_TOKEN` | Bearer-Token aus der [Hetzner Cloud Console](https://console.hetzner.cloud/) |
+| `DNSJINJA_TEST_DOMAIN` | Testdomain, die bereits als primäre Zone bei Hetzner eingerichtet ist |
+
+Die Variablen können direkt gesetzt oder in `$HOME/.dnsjinja/dnsjinja.env` bzw. einer lokalen `.env`-Datei hinterlegt werden. Sind sie nicht gesetzt, werden die Integrationstests automatisch übersprungen.
+
+> **Hinweis:** Der Upload-Test überschreibt alle DNS-Records der Testdomain mit einem minimalen Zone-File. Die Domain sollte ausschließlich für Tests verwendet werden.
+
+```bash
+export DNSJINJA_AUTH_API_TOKEN=<token>
+export DNSJINJA_TEST_DOMAIN=<testdomain>
+
+# Nur Integrationstests
+pytest tests/test_integration.py -m integration -v
+
+# Alle Tests
+pytest -v
+```
+
 ## Benutzung
 
 `dnsjinja` wird mit den benötigten Kommandozeilen-Parameter aufgerufen. Die Konfiguration erfolgt in
