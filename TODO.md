@@ -9,4 +9,4 @@
     - Quelle: git+ssh://github-kaijen/kaijen/dns_hetzner.git
 - [ ] Docker Container zum Ausrollen
 - [ ] Docker Container zum Entwickeln bei dem das Modul mit `pip install -e .` installiert wird
-- [ ]
+- [ ] Umschreiben auf [Hetzner Cloud API Python Bibliothek](https://github.com/hetznercloud/hcloud-python)
