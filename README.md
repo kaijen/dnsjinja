@@ -168,6 +168,8 @@ Options:
   -u, --upload           Upload der Zonen
   -b, --backup           Backup der Zonen
   -w, --write            Zone-Files schreiben
+  -C, --create-missing   Konfigurierte Domains, die bei Hetzner nicht
+                         existieren, neu anlegen
   --auth-api-token TEXT  API-Token (Bearer) für Hetzner Cloud API
                          (DNSJINJA_AUTH_API_TOKEN)
 ```
@@ -175,6 +177,8 @@ Options:
 Das API-Token (Bearer) wird in der [Hetzner Cloud Console](https://console.hetzner.cloud/) im jeweiligen Projekt erstellt.
 Alte `Auth-API-Token` von `dns.hetzner.com` funktionieren nicht mehr.
 Das Token wird bei Bedarf abgefragt und ist sicher abzulegen.
+
+Mit dem Flag `-C` / `--create-missing` werden Domains, die in der Konfiguration vorhanden aber noch nicht bei Hetzner eingerichtet sind, automatisch als primäre Zone neu angelegt. Ohne dieses Flag werden solche Domains wie bisher mit einer Warnung übersprungen.
 
 Eine Vorlage für eine `config.json` kann mithilfe von `explore_hetzner` aus einem existieren Hetzner-Account erstellt werden.
 `explore_hetzner` wird bei der Installation mit `pip` ebenfalls erzeugt.

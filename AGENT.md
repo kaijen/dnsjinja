@@ -79,7 +79,7 @@ Contains the `DNSJinja` class with all core logic:
 
 - **`DEFAULT_API_BASE`** - Class constant: `https://api.hetzner.cloud/v1`
 - **`__init__(upload, backup, write_zone, datadir, config_file, auth_api_token)`** - Loads config, validates schema, initializes `hcloud.Client`, sets up Jinja2 environment, prepares zones
-- **`_prepare_zones()`** - Syncs configured domains with Hetzner via `client.zones.get_all()`, auto-populates `zone-id`, `zone-file` and stores `BoundZone` objects in `_hetzner_zones`
+- **`_prepare_zones()`** - Syncs configured domains with Hetzner via `client.zones.get_all()`, auto-populates `zone-id`, `zone-file` and stores `BoundZone` objects in `_hetzner_zones`. If `_create_missing` is set, creates missing zones via `client.zones.create(name, mode="primary")`
 - **`_get_zone_serial(domain)`** - Queries SOA serial from Hetzner nameservers via dnspython
 - **`_new_zone_serial(domain)`** - Generates SOA serial in `YYYYMMDD##` format (auto-incrementing counter)
 - **`_create_zone_data()`** - Renders all Jinja2 templates into zone file content
@@ -91,7 +91,7 @@ Contains the `DNSJinja` class with all core logic:
 
 Custom exception: `UploadError` - raised on upload failure, writes exit code 254 to temp file.
 
-CLI function `run()` uses Click with options for `--datadir`, `--config`, `--upload`, `--backup`, `--write`, `--auth-api-token`.
+CLI function `run()` uses Click with options for `--datadir`, `--config`, `--upload`, `--backup`, `--write`, `--create-missing`, `--auth-api-token`.
 
 ### `dnsjinja_config_schema.py` - Config Schema
 
@@ -144,6 +144,7 @@ Reads exit code from `{tempdir}/dnsjinja.exit.txt` and calls `sys.exit()` with t
 | `-u`, `--upload` | `False` | - | Upload zones to Hetzner |
 | `-b`, `--backup` | `False` | - | Backup zones from Hetzner |
 | `-w`, `--write` | `False` | - | Write zone files locally |
+| `-C`, `--create-missing` | `False` | - | Create zones at Hetzner that are configured but not yet present |
 | `--auth-api-token` | `""` | `DNSJINJA_AUTH_API_TOKEN` | Bearer token for Hetzner Cloud API |
 
 ### `explore_hetzner` Options

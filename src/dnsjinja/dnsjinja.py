@@ -40,9 +40,18 @@ class DNSJinja:
             hetzner_domains = set(z.name for z in all_zones)
             config_domains = set(self.config['domains'].keys())
             hetzner_zones = {z.name: z for z in all_zones}
-            for d in (config_domains - hetzner_domains):
-                print(f'{d} ist konfiguriert aber nicht bei Hetzner eingerichtet - wird ignoriert')
-                del self.config['domains'][d]
+            for d in sorted(config_domains - hetzner_domains):
+                if self._create_missing:
+                    try:
+                        response = self.client.zones.create(name=d, mode="primary")
+                        hetzner_zones[d] = response.zone
+                        print(f'{d} wurde neu bei Hetzner angelegt')
+                    except Exception as e:
+                        print(f'{d} konnte bei Hetzner nicht angelegt werden: {e} - wird ignoriert')
+                        del self.config['domains'][d]
+                else:
+                    print(f'{d} ist konfiguriert aber nicht bei Hetzner eingerichtet - wird ignoriert')
+                    del self.config['domains'][d]
             for d in (hetzner_domains - config_domains):
                 print(f'{d} ist bei Hetzner eingerichtet aber nicht konfiguriert - bitte prüfen')
             for d in self.config['domains'].keys():
@@ -53,7 +62,7 @@ class DNSJinja:
             print(f'Zonen bei Hetzner konnten nicht ermittelt werden: {e}')
             sys.exit(1)
 
-    def __init__(self, upload=False, backup=False, write_zone=False, datadir="", config_file="config/config.json", auth_api_token=""):
+    def __init__(self, upload=False, backup=False, write_zone=False, datadir="", config_file="config/config.json", auth_api_token="", create_missing=False):
         self.datadir = DNSJinja._check_dir(datadir, '.', 'Datenverzeichnis')
         self.config_file = DNSJinja._check_dir(config_file, '.', 'Konfigurationsdatei')
 
@@ -81,6 +90,7 @@ class DNSJinja:
         api_base = self.config['global'].get('dns-api-base', self.DEFAULT_API_BASE).rstrip('/')
         self.client = Client(token=self.auth_api_token, api_endpoint=api_base)
         self._hetzner_zones = {}
+        self._create_missing = create_missing
 
         self._prepare_zones()
 
@@ -213,10 +223,11 @@ class DNSJinja:
 @click.option('-u', '--upload', is_flag=True, default=False, help="Upload der Zonen")
 @click.option('-b', '--backup', is_flag=True, default=False, help="Backup der Zonen")
 @click.option('-w', '--write', is_flag=True, default=False, help="Zone-Files schreiben")
+@click.option('-C', '--create-missing', is_flag=True, default=False, help="Konfigurierte Domains, die bei Hetzner nicht existieren, neu anlegen")
 @click.option('--auth-api-token', default="", envvar='DNSJINJA_AUTH_API_TOKEN', help="API-Token (Bearer) für Hetzner Cloud API (DNSJINJA_AUTH_API_TOKEN)")
-def run(upload, backup, write, datadir, config, auth_api_token):
+def run(upload, backup, write, datadir, config, auth_api_token, create_missing):
     """Modulare Verwaltung von DNS-Zonen (Hetzner Cloud API)"""
-    dnsjinja = DNSJinja(upload, backup, write, datadir, config, auth_api_token)
+    dnsjinja = DNSJinja(upload, backup, write, datadir, config, auth_api_token, create_missing)
     dnsjinja.backup_zones()
     dnsjinja.write_zone_files()
     dnsjinja.upload_zones()
