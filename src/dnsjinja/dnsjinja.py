@@ -190,8 +190,8 @@ class DNSJinja:
         url = f"{self.api_base}/zones/{zone_id}/actions/import_zonefile"
         response = requests.post(
             url=url,
-            headers=self._api_headers("text/plain"),
-            data=self.zones[domain].encode("utf-8"),
+            headers=self._api_headers(),
+            json={"zonefile": self.zones[domain]},
         )
         if response.status_code == 200 or response.status_code == 201:
             print(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
@@ -227,8 +227,9 @@ class DNSJinja:
             )
             if response.status_code == 200:
                 backupfile = self.zone_backups_dir / Path(self.config['domains'][domain]['zone-file'] + f'.{self._get_zone_serial(domain)}')
+                zone_content = response.json()["zonefile"]
                 with open(backupfile, 'w', encoding='utf-8') as zf:
-                    print(response.text, file=zf)
+                    print(zone_content, file=zf)
                 print(f'Domäne {domain} wurde erfolgreich gesichert')
             else:
                 raise Exception(f'HTTP-Response-Code {response.status_code}')
