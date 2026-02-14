@@ -1,5 +1,5 @@
 Jinja2
-requests
+hcloud
 dnspython
 Click
 python-dotenv

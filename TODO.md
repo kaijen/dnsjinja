@@ -8,4 +8,4 @@
   - [x] Erläuterung der Struktur der Konfiguration (Input JSON und jinja2 Dateien)
 - [x] Docker Container zum Ausrollen
 - [x] Docker Container zum Entwickeln bei dem das Modul mit `pip install -e .` installiert uird
-- [ ] Umschreiben auf [Hetzner Cloud API Python Bibliothek](https://github.com/hetznercloud/hcloud-python
+- [x] Umschreiben auf [Hetzner Cloud API Python Bibliothek](https://github.com/hetznercloud/hcloud-python)
