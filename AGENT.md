@@ -215,6 +215,11 @@ See `samples/config.json.sample` for a complete example with multiple domain con
 
 DNSJinja uses the Hetzner Cloud API (`https://api.hetzner.cloud/v1`) with Bearer token authentication.
 
+### External References
+
+- [Hetzner Cloud API – Zone Actions](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions)
+- [hcloud-python – Official Hetzner Cloud Python Client](https://github.com/hetznercloud/hcloud-python)
+
 ### API Endpoints Used
 
 | Operation | Method | Endpoint |

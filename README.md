@@ -3,7 +3,7 @@
 `dnsjinja` ist ein Python-Script, das mit Hilfe von [Jinja](https://palletsprojects.com/p/jinja/) aus modularen
 Template-Dateien Bind9-kompatible Zone-Files erzeugt.
 
-Diese Zone-Files sollten genutzt werden, um die DNS-Konfiguration per [Hetzner Cloud API](https://docs.hetzner.cloud/#dns-zones) bei Hetzner einzuspielen.
+Diese Zone-Files sollten genutzt werden, um die DNS-Konfiguration per [Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions) bei Hetzner einzuspielen.
 
 ## Installation
 
@@ -389,7 +389,7 @@ Die Beispiele verwenden ausschließlich abstrakte Daten (`example.com`, `198.51.
 
 ## Hetzner Cloud API
 
-`dnsjinja` nutzt die [Hetzner Cloud API](https://docs.hetzner.cloud/#dns-zones) mit Bearer-Token-Authentifizierung. Die Basis-URL (`https://api.hetzner.cloud/v1`) kann über `dns-api-base` in der Konfiguration oder die Umgebungsvariable `DNSJINJA_API_BASE` überschrieben werden.
+`dnsjinja` nutzt die [Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions) mit Bearer-Token-Authentifizierung. Die API-Implementierung orientiert sich an der offiziellen Python-Bibliothek [hcloud-python](https://github.com/hetznercloud/hcloud-python). Die Basis-URL (`https://api.hetzner.cloud/v1`) kann über `dns-api-base` in der Konfiguration oder die Umgebungsvariable `DNSJINJA_API_BASE` überschrieben werden.
 
 Verwendete Endpunkte:
 
