@@ -2,3 +2,8 @@
 requires = ["setuptools>=58", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: Integrationstests, die DNSJINJA_AUTH_API_TOKEN und DNSJINJA_TEST_DOMAIN benötigen",
+]
