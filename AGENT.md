@@ -78,19 +78,18 @@ A complete sample data set is provided in `samples/`.
 Contains the `DNSJinja` class with all core logic:
 
 - **`DEFAULT_API_BASE`** - Class constant: `https://api.hetzner.cloud/v1`
-- **`__init__(upload, backup, write_zone, datadir, config_file, auth_api_token)`** - Loads config, validates schema, sets up Jinja2 environment, prepares zones
-- **`_api_headers(content_type)`** - Returns `Authorization: Bearer` and Content-Type headers
-- **`_prepare_zones()`** - Syncs configured domains with Hetzner Cloud API (paginated), auto-populates `zone-id` and `zone-file`
+- **`__init__(upload, backup, write_zone, datadir, config_file, auth_api_token)`** - Loads config, validates schema, initializes `hcloud.Client`, sets up Jinja2 environment, prepares zones
+- **`_prepare_zones()`** - Syncs configured domains with Hetzner via `client.zones.get_all()`, auto-populates `zone-id`, `zone-file` and stores `BoundZone` objects in `_hetzner_zones`
 - **`_get_zone_serial(domain)`** - Queries SOA serial from Hetzner nameservers via dnspython
 - **`_new_zone_serial(domain)`** - Generates SOA serial in `YYYYMMDD##` format (auto-incrementing counter)
 - **`_create_zone_data()`** - Renders all Jinja2 templates into zone file content
 - **`write_zone_files()`** - Writes rendered zones to local files as `{domain}.zone.{serial}`
-- **`upload_zone(domain)`** - POSTs zone data to `{api_base}/zones/{zone_id}/actions/import_zonefile`
+- **`upload_zone(domain)`** - Imports zone data via `client.zones.import_zonefile(zone, zonefile)`
 - **`upload_zones()`** - Uploads all configured zones, continues on individual failures
-- **`backup_zone(domain)`** - GETs zone data from `{api_base}/zones/{zone_id}/zonefile`
+- **`backup_zone(domain)`** - Exports zone data via `client.zones.export_zonefile(zone)`
 - **`backup_zones()`** - Backs up all configured zones
 
-Custom exception: `UploadError` - raised on upload failure (HTTP != 200/201), writes exit code 254 to temp file.
+Custom exception: `UploadError` - raised on upload failure, writes exit code 254 to temp file.
 
 CLI function `run()` uses Click with options for `--datadir`, `--config`, `--upload`, `--backup`, `--write`, `--auth-api-token`.
 
@@ -104,7 +103,7 @@ Note: `zone-id` and `zone-file` are auto-populated by `_prepare_zones()` from th
 
 ### `explore_hetzner.py` - Zone Discovery
 
-`ExploreHetzner` class fetches all zones from the Hetzner Cloud API (with pagination) and outputs a JSON config template. Accepts optional `api_base` parameter. Useful for initial project setup.
+`ExploreHetzner` class fetches all zones via `hcloud.Client.zones.get_all()` and outputs a JSON config template. Accepts optional `api_base` parameter. Useful for initial project setup.
 
 ### `myloadenv.py` - Environment Loader
 
@@ -119,7 +118,7 @@ Reads exit code from `{tempdir}/dnsjinja.exit.txt` and calls `sys.exit()` with t
 | Package | Purpose |
 |---------|---------|
 | Jinja2 | Template rendering for zone files |
-| requests | HTTP client for Hetzner Cloud API |
+| hcloud | Official Hetzner Cloud Python client (zones API) |
 | dnspython | DNS resolver for SOA serial queries |
 | Click | CLI framework with env var support |
 | python-dotenv | .env file loading |
@@ -213,24 +212,22 @@ See `samples/config.json.sample` for a complete example with multiple domain con
 
 ## Hetzner Cloud API
 
-DNSJinja uses the Hetzner Cloud API (`https://api.hetzner.cloud/v1`) with Bearer token authentication.
+DNSJinja uses the official [hcloud-python](https://github.com/hetznercloud/hcloud-python) library to communicate with the Hetzner Cloud API (`https://api.hetzner.cloud/v1`). HTTP handling, authentication, and pagination are managed by the library.
 
 ### External References
 
 - [Hetzner Cloud API – Zone Actions](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions)
 - [hcloud-python – Official Hetzner Cloud Python Client](https://github.com/hetznercloud/hcloud-python)
 
-### API Endpoints Used
+### hcloud Client Methods Used
 
-| Operation | Method | Endpoint |
-|-----------|--------|----------|
-| List zones | GET | `{api_base}/zones` (paginated) |
-| Import zone | POST | `{api_base}/zones/{zone_id}/actions/import_zonefile` |
-| Export zone | GET | `{api_base}/zones/{zone_id}/zonefile` |
+| Operation | hcloud Method |
+|-----------|---------------|
+| List zones | `client.zones.get_all()` |
+| Import zone | `client.zones.import_zonefile(zone, zonefile)` |
+| Export zone | `client.zones.export_zonefile(zone)` |
 
-### Authentication
-
-All requests use `Authorization: Bearer <token>` header. The API token is created in the Hetzner Cloud Console (not the old dns.hetzner.com portal).
+The `hcloud.Client` is initialised with the API token and optional `api_endpoint` (from `dns-api-base` config). The API token is created in the Hetzner Cloud Console (not the old dns.hetzner.com portal).
 
 ## Workflow
 

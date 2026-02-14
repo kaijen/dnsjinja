@@ -389,17 +389,17 @@ Die Beispiele verwenden ausschließlich abstrakte Daten (`example.com`, `198.51.
 
 ## Hetzner Cloud API
 
-`dnsjinja` nutzt die [Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions) mit Bearer-Token-Authentifizierung. Die API-Implementierung orientiert sich an der offiziellen Python-Bibliothek [hcloud-python](https://github.com/hetznercloud/hcloud-python). Die Basis-URL (`https://api.hetzner.cloud/v1`) kann über `dns-api-base` in der Konfiguration oder die Umgebungsvariable `DNSJINJA_API_BASE` überschrieben werden.
+`dnsjinja` nutzt die offizielle Python-Bibliothek [hcloud-python](https://github.com/hetznercloud/hcloud-python) für die Kommunikation mit der [Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions). HTTP-Aufrufe, Authentifizierung und Paginierung werden von der Bibliothek übernommen. Die Basis-URL (`https://api.hetzner.cloud/v1`) kann über `dns-api-base` in der Konfiguration oder die Umgebungsvariable `DNSJINJA_API_BASE` überschrieben werden.
 
-Verwendete Endpunkte:
+Verwendete hcloud-Methoden:
 
-| Endpunkt | Methode | Beschreibung |
-|----------|---------|--------------|
-| `{dns-api-base}/zones` | GET | Zonen auflisten (paginiert, 100 pro Seite) |
-| `{dns-api-base}/zones/{zone-id}/actions/import_zonefile` | POST | Zone-File importieren (Upload) |
-| `{dns-api-base}/zones/{zone-id}/zonefile` | GET | Zone-File exportieren (Backup) |
+| Operation | hcloud-Methode | Beschreibung |
+|-----------|----------------|--------------|
+| Zonen auflisten | `client.zones.get_all()` | Alle Zonen abrufen |
+| Zone-File importieren | `client.zones.import_zonefile(zone, zonefile)` | Upload |
+| Zone-File exportieren | `client.zones.export_zonefile(zone)` | Backup |
 
-Die Authentifizierung erfolgt über den HTTP-Header `Authorization: Bearer {token}`. Der Token wird über die Hetzner Cloud Console erstellt (nicht der alte Auth-API-Token von dns.hetzner.com).
+Der API-Token wird über die Hetzner Cloud Console erstellt (nicht der alte Auth-API-Token von dns.hetzner.com).
 
 ## GitHub Actions
 
