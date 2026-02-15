@@ -16,96 +16,9 @@ Grundlage: Quellcode-Analyse aller Dateien unter `src/dnsjinja/` und `tests/`
 
 ---
 
-## 1  Verbesserungsideen
+## 1  Code-Vereinfachung
 
-### 1.1  Validierung der Zone-File-Syntax vor dem Upload 🔵
-Gerenderte Zone-Files werden nicht syntaktisch geprüft. Ein ungültiges
-Zone-File wird hochgeladen und Hetzner liefert dann einen Fehler zurück.
-`dnspython` hat einen Zone-Parser (`dns.zone.from_text()`), der vor dem
-Upload aufgerufen werden könnte.
-
----
-
-### 1.2  SOA-Serial im `_create_zone_data()`-Rückgabewert mitführen 🔵
-Zur Behebung von Bug 2.3 bietet sich an, `_create_zone_data()` ein
-`dict[str, tuple[str, str]]` (domain → (zonefile_content, serial)) zurückgeben
-zu lassen. So ist die Serial für `write_zone_files()` und zukünftige
-Verwendungen direkt verfügbar.
-
----
-
-### 1.3  `--dry-run`-Flag 🔵
-Vor einem Upload wäre eine Vorschau-Option nützlich: Zone-File rendern und
-ausgeben, aber weder schreiben noch hochladen. Besonders hilfreich für CI-Pipelines,
-die Pull-Requests validieren.
-
----
-
-### 1.4  Template-Namen gegen Traversal absichern 🔵
-`env.get_template(d["template"])` akzeptiert den Template-Namen direkt aus der
-Config. Jinja2's `FileSystemLoader` verhindert Pfad-Traversal durch seine
-Sandbox, aber ein explizites Whitelist-Pattern
-(`^[a-zA-Z0-9._-]+\.tpl$` o. ä.) würde die Intention klarer ausdrücken.
-
----
-
-## 2  Bugs
-
-### 2.1  `__main__.py` – fehlender `import sys` 🔴
-**Datei:** `src/dnsjinja/__main__.py:5`
-
-```python
-from .dnsjinja import main
-
-if __name__ == '__main__':
-    sys.tracebacklimit = 0   # ← sys ist nicht importiert!
-    main()
-```
-
-`sys` wird in Zeile 5 verwendet, aber nicht importiert. Jeder Aufruf via
-`python -m dnsjinja` endet mit einem `NameError: name 'sys' is not defined`,
-bevor `main()` überhaupt erreicht wird.
-
-**Empfehlung:** `import sys` am Anfang der Datei hinzufügen.
-
----
-
-### 2.2  `explore_hetzner.py` – Token im Klartext sichtbar 🟠
-**Datei:** `src/dnsjinja/explore_hetzner.py:13`
-
-```python
-auth_api_token = auth_api_token or input('Hetzner API-Token (Bearer): ')
-```
-
-Das Security-Finding 1.1 (`input()` statt `getpass.getpass()`) wurde in
-`dnsjinja.py` behoben, aber `explore_hetzner.py` enthält dasselbe Muster
-noch unverändert. Das Token wird beim Tippen am Bildschirm angezeigt.
-
-**Empfehlung:** `getpass.getpass('Hetzner API-Token (Bearer): ')` verwenden.
-
----
-
-### 2.3  `explore_hetzner.py` – Breites `except Exception` 🟡
-**Datei:** `src/dnsjinja/explore_hetzner.py:25,30`
-
-```python
-except Exception as e:
-    print(f'Fehler beim Abfragen der Zonen: {e}')
-...
-except Exception as e:
-    print(f'Fehler beim Schreiben von {self.output}: {str(e)}')
-```
-
-Beide Blöcke fangen `Exception` zu weit gefasst ab – dasselbe Problem wie
-Finding 3.2 in `dnsjinja.py`, dort bereits behoben.
-
-**Empfehlung:** Spezifische Typen: `hcloud.APIException` bzw. `OSError`.
-
----
-
-## 3  Code-Vereinfachung
-
-### 3.1  `_check_dir` / `_check_file` zusammenführen 🟡
+### 1.1  `_check_dir` / `_check_file` zusammenführen 🟡
 **Datei:** `src/dnsjinja/dnsjinja.py:29–47`
 
 ```python
@@ -143,7 +56,7 @@ def _check_path(path: str, basedir: str, typ: str, expect: str = 'dir') -> Path:
 
 ---
 
-### 3.2  Redundantes `hetzner_domains`-Set in `_prepare_zones()` 🟡
+### 1.2  Redundantes `hetzner_domains`-Set in `_prepare_zones()` 🟡
 **Datei:** `src/dnsjinja/dnsjinja.py:53–55`
 
 ```python
@@ -168,7 +81,7 @@ for d in (hetzner_zones.keys() - config_domains):
 
 ---
 
-### 3.3  `UploadError.msgfmt` – toter Code 🟡
+### 1.3  `UploadError.msgfmt` – toter Code 🟡
 **Datei:** `src/dnsjinja/dnsjinja.py:19–22`
 
 ```python
@@ -190,7 +103,7 @@ class UploadError(Exception):
 
 ---
 
-### 3.4  Unbenutzte Loop-Variable `d` 🟡
+### 1.4  Unbenutzte Loop-Variable `d` 🟡
 **Datei:** `src/dnsjinja/dnsjinja.py:218,239`
 
 ```python
@@ -212,7 +125,7 @@ for domain in self.config["domains"]:
 
 ---
 
-### 3.5  Properties ohne Validierungslogik 🟡
+### 1.5  Properties ohne Validierungslogik 🟡
 **Datei:** `src/dnsjinja/dnsjinja.py:134–160`
 
 ```python
@@ -241,9 +154,9 @@ werden (kein Breaking Change).
 
 ---
 
-## 4  Robustheit
+## 2  Robustheit
 
-### 4.1  `exit_on_error.py` – `int(ec)` ohne Fehlerbehandlung 🟠
+### 2.1  `exit_on_error.py` – `int(ec)` ohne Fehlerbehandlung 🟠
 **Datei:** `src/dnsjinja/exit_on_error.py:26`
 
 ```python
@@ -265,7 +178,7 @@ except ValueError:
 
 ---
 
-### 4.2  `myloadenv.py` – lädt *alle* .env-Dateien statt nur die erste 🟡
+### 2.2  `myloadenv.py` – lädt *alle* .env-Dateien statt nur die erste 🟡
 **Datei:** `src/dnsjinja/myloadenv.py:33–37`
 
 ```python
@@ -289,7 +202,7 @@ Priorität zuletzt laden, damit sie nicht überschrieben wird).
 
 ---
 
-### 4.3  JSON-Schema: `additionalItems: True` wirkungslos 🟡
+### 2.3  JSON-Schema: `additionalItems: True` wirkungslos 🟡
 **Datei:** `src/dnsjinja/dnsjinja_config_schema.py:82`
 
 ```json
@@ -306,7 +219,7 @@ später umbenannt (`unevaluatedItems`).
 
 ---
 
-### 4.4  JSON-Schema: `anyOf` mit nur einem Element 🟡
+### 2.4  JSON-Schema: `anyOf` mit nur einem Element 🟡
 **Datei:** `src/dnsjinja/dnsjinja_config_schema.py:85–94`
 
 ```json
@@ -337,9 +250,9 @@ aus einem Schema-Generator.
 
 ---
 
-## 5  Wartbarkeit
+## 3  Wartbarkeit
 
-### 5.1  `__init__` ohne Type Hints 🟡
+### 3.1  `__init__` ohne Type Hints 🟡
 **Datei:** `src/dnsjinja/dnsjinja.py:78`
 
 ```python
@@ -362,7 +275,7 @@ def __init__(self, upload: bool = False, backup: bool = False,
 
 ---
 
-### 5.2  `__init__.py` ohne `__version__` und `__all__` 🟡
+### 3.2  `__init__.py` ohne `__version__` und `__all__` 🟡
 **Datei:** `src/dnsjinja/__init__.py`
 
 ```python
@@ -384,7 +297,7 @@ __all__ = ['DNSJinja', 'main', 'explore_main', 'exit_on_error']
 
 ---
 
-### 5.3  Testlücke: Schema-Validierung 🟡
+### 3.3  Testlücke: Schema-Validierung 🟡
 **Datei:** `tests/test_unit.py`
 
 Es gibt keinen Test, der prüft, ob eine Config **ohne** das Pflichtfeld
@@ -410,7 +323,7 @@ def test_config_ohne_template_schlaegt_fehl(self, data_dir, mock_client,
 
 ---
 
-### 5.4  Testlücke: Template-Rendering 🟡
+### 3.4  Testlücke: Template-Rendering 🟡
 **Datei:** `tests/test_unit.py`
 
 Kein Test prüft, ob `domain` und `soa_serial` korrekt in das Zone-File
@@ -430,7 +343,7 @@ def test_template_variablen_werden_substituiert(self, data_dir, config_file,
 
 ---
 
-## 6  Modernisierungspotenzial
+## 4  Modernisierungspotenzial
 
 Stand: 2026-02-15 – Empfehlungen für "more Pythonic" Code und zeitgemäßere Bibliotheken
 
@@ -605,9 +518,6 @@ def foo(x: Optional[str] = None) -> Dict[str, List[str]]: ...
 def foo(x: str | None = None) -> dict[str, list[str]]: ...
 ```
 
-Betrifft: `self._serials: dict = {}` in `dnsjinja.py:131` sollte
-`self._serials: dict[str, str] = {}` werden.
-
 ---
 
 ### M.9  `TypedDict` für Domain-Konfiguration 🟡
@@ -637,26 +547,19 @@ Dies wäre ein vorbereitender Schritt für eine eventuelle Pydantic-Migration
 
 | # | Schweregrad | Datei / Zeile | Kurzbeschreibung |
 |---|-------------|---------------|-----------------|
-| 1.1 | 🔵 | – | Validierung Zone-File-Syntax vor Upload |
-| 1.2 | 🔵 | – | SOA-Serial im Rückgabewert mitführen |
-| 1.3 | 🔵 | – | `--dry-run`-Flag |
-| 1.4 | 🔵 | – | Template-Namen gegen Traversal absichern |
-| 2.1 | 🔴 | `__main__.py:5` | `import sys` fehlt → `NameError` |
-| 2.2 | 🟠 | `explore_hetzner.py:13` | Token über `input()` sichtbar |
-| 2.3 | 🟡 | `explore_hetzner.py:25,30` | Breites `except Exception` |
-| 3.1 | 🟡 | `dnsjinja.py:29–47` | `_check_dir`/`_check_file` zusammenführen |
-| 3.2 | 🟡 | `dnsjinja.py:53–55` | Redundantes `hetzner_domains`-Set |
-| 3.3 | 🟡 | `dnsjinja.py:19–22` | `UploadError.msgfmt` toter Code |
-| 3.4 | 🟡 | `dnsjinja.py:218,239` | Unbenutzte Loop-Variable `d` |
-| 3.5 | 🟡 | `dnsjinja.py:134–160` | Properties ohne Logik |
-| 4.1 | 🟠 | `exit_on_error.py:26` | `int(ec)` ohne Fehlerbehandlung |
-| 4.2 | 🟡 | `myloadenv.py:33–37` | Alle .env-Dateien statt nur erste laden |
-| 4.3 | 🟡 | `dnsjinja_config_schema.py:82` | `additionalItems` wirkungslos |
-| 4.4 | 🟡 | `dnsjinja_config_schema.py:85–94` | `anyOf` mit einem Element |
-| 5.1 | 🟡 | `dnsjinja.py:78` | Type Hints für `__init__` |
-| 5.2 | 🟡 | `__init__.py` | `__version__` und `__all__` fehlen |
-| 5.3 | 🟡 | `test_unit.py` | Testlücke: Schema-Validierung |
-| 5.4 | 🟡 | `test_unit.py` | Testlücke: Template-Rendering |
+| 1.1 | 🟡 | `dnsjinja.py:29–47` | `_check_dir`/`_check_file` zusammenführen |
+| 1.2 | 🟡 | `dnsjinja.py:53–55` | Redundantes `hetzner_domains`-Set |
+| 1.3 | 🟡 | `dnsjinja.py:19–22` | `UploadError.msgfmt` toter Code |
+| 1.4 | 🟡 | `dnsjinja.py:218,239` | Unbenutzte Loop-Variable `d` |
+| 1.5 | 🟡 | `dnsjinja.py:134–160` | Properties ohne Logik |
+| 2.1 | 🟠 | `exit_on_error.py:26` | `int(ec)` ohne Fehlerbehandlung |
+| 2.2 | 🟡 | `myloadenv.py:33–37` | Alle .env-Dateien statt nur erste laden |
+| 2.3 | 🟡 | `dnsjinja_config_schema.py:82` | `additionalItems` wirkungslos |
+| 2.4 | 🟡 | `dnsjinja_config_schema.py:85–94` | `anyOf` mit einem Element |
+| 3.1 | 🟡 | `dnsjinja.py:78` | Type Hints für `__init__` |
+| 3.2 | 🟡 | `__init__.py` | `__version__` und `__all__` fehlen |
+| 3.3 | 🟡 | `test_unit.py` | Testlücke: Schema-Validierung |
+| 3.4 | 🟡 | `test_unit.py` | Testlücke: Template-Rendering |
 | M.1 | 🟠 | `myloadenv.py:1,14` | `appdirs` (abandoned) → `platformdirs` |
 | M.2 | 🟡 | `myloadenv.py:16` | `Path().absolute()` → `Path.cwd()` |
 | M.3 | 🟡 | `setup.cfg` | `setup.cfg` → `pyproject.toml` (PEP 621) |
