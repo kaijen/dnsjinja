@@ -178,30 +178,6 @@ except ValueError:
 
 ---
 
-### 2.2  `myloadenv.py` – lädt *alle* .env-Dateien statt nur die erste 🟡
-**Datei:** `src/dnsjinja/myloadenv.py:33–37`
-
-```python
-for p in env_paths:
-    for n in env_names:
-        file = Path(p) / Path(n)
-        if file.exists():
-            dotenv.load_dotenv(file)   # ← kein break, kein return
-```
-
-Die verschachtelte Schleife bricht nie ab. Werden z. B. sowohl
-`~/.config/dnsjinja.env` als auch `./dnsjinja.env` gefunden, werden beide
-geladen – spätere Werte überschreiben frühere. In `tests/conftest.py` wird
-dagegen bewusst beim ersten Treffer abgebrochen (`break`). Das Verhalten
-sollte einheitlich und dokumentiert sein.
-
-**Empfehlung:** Entweder nach der ersten gefundenen Datei abbrechen
-(`return` nach `load_dotenv()`), oder das bewusste Merge-Verhalten im
-Docstring dokumentieren und die Reihenfolge nach Priorität ordnen (höchste
-Priorität zuletzt laden, damit sie nicht überschrieben wird).
-
----
-
 ### 2.3  JSON-Schema: `additionalItems: True` wirkungslos 🟡
 **Datei:** `src/dnsjinja/dnsjinja_config_schema.py:82`
 
@@ -553,7 +529,6 @@ Dies wäre ein vorbereitender Schritt für eine eventuelle Pydantic-Migration
 | 1.4 | 🟡 | `dnsjinja.py:218,239` | Unbenutzte Loop-Variable `d` |
 | 1.5 | 🟡 | `dnsjinja.py:134–160` | Properties ohne Logik |
 | 2.1 | 🟠 | `exit_on_error.py:26` | `int(ec)` ohne Fehlerbehandlung |
-| 2.2 | 🟡 | `myloadenv.py:33–37` | Alle .env-Dateien statt nur erste laden |
 | 2.3 | 🟡 | `dnsjinja_config_schema.py:82` | `additionalItems` wirkungslos |
 | 2.4 | 🟡 | `dnsjinja_config_schema.py:85–94` | `anyOf` mit einem Element |
 | 3.1 | 🟡 | `dnsjinja.py:78` | Type Hints für `__init__` |

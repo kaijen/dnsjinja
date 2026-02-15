@@ -411,6 +411,18 @@
 
 ---
 
+### Myloadenv – .env-Ladereihenfolge
+
+- [x] **2.2 – Korrekte Kaskadenreihenfolge in `myloadenv.py`** (`myloadenv.py:33–37`)
+
+  Die verschachtelte Schleife lädt alle gefundenen `.env`-Dateien ohne
+  `break`; de-facto gewinnt die zuerst gefundene Datei (Home-Dir), nicht die
+  spezifischste (CWD). Konventionelle Reihenfolge implementieren:
+  CWD > User-Home-Dotdir > User-Config-Dir > `/etc` (Linux/Container).
+  Gleichzeitig: `appdirs` → `platformdirs`, `Path().absolute()` → `Path.cwd()`.
+
+---
+
 ### Bugs (Zweites Review)
 
 - [x] **2.1 – `__main__.py` – fehlender `import sys`** (`__main__.py:5`)
