@@ -1,5 +1,5 @@
 DNSJINJA_JSON_SCHEMA = {
-    "$schema": "http://json-schema.org/draft-07/schema",
+    "$schema": "https://json-schema.org/draft-07/schema",
     "$id": "http://jendrian.eu/schemas/dnsjinijaconfig.json",
     "type": "object",
     "title": "Configuration format for DNSJinja",
@@ -103,8 +103,8 @@ DNSJINJA_JSON_SCHEMA = {
             "title": "domains",
             "description": "All the domains to be handled by dns-jinja.py",
             "default": {},
-            "pattern_properties": {
-                "\"^.*$\"": {
+            "patternProperties": {
+                "^.*$": {
                     "$id": "#/properties/domains/properties/domain",
                     "type": "object",
                     "title": "domain",

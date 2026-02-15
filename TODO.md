@@ -167,7 +167,7 @@
 
 ---
 
-- [ ] **2.4 – `_check_dir`: `is_dir()` statt `exists()`** (`dnsjinja.py:27–33`)
+- [x] **2.4 – `_check_dir`: `is_dir()` statt `exists()`** (`dnsjinja.py:27–33`)
 
   ```python
   # vorher:
@@ -202,7 +202,7 @@
 
 ---
 
-- [ ] **2.5 – `patternProperties` (camelCase) im JSON-Schema** (`dnsjinja_config_schema.py:106`)
+- [x] **2.5 – `patternProperties` (camelCase) im JSON-Schema** (`dnsjinja_config_schema.py:106`)
 
   Der Schlüssel `pattern_properties` (Unterstrich) ist kein gültiges
   JSON-Schema-Keyword und wird von `jsonschema` ignoriert. Dadurch wird
@@ -225,7 +225,7 @@
 
 ---
 
-- [ ] **2.6 – Interaktiver Client ohne `api_endpoint`** (`dnsjinja.py:89,191,215`)
+- [x] **2.6 – Interaktiver Client ohne `api_endpoint`** (`dnsjinja.py:89,191,215`)
 
   `api_base` als Instanzvariable speichern und beim interaktiven
   Client-Neuaufbau verwenden:
@@ -241,7 +241,7 @@
 
 ---
 
-- [ ] **2.7 – Toter Code `global exit_status` entfernen** (`dnsjinja.py:237`)
+- [x] **2.7 – Toter Code `global exit_status` entfernen** (`dnsjinja.py:237`)
 
   ```python
   # vorher:
@@ -258,7 +258,7 @@
 
 ---
 
-- [ ] **2.8 – Duplikat `python-dotenv` in `setup.cfg` entfernen** (`setup.cfg:30`)
+- [x] **2.8 – Duplikat `python-dotenv` in `setup.cfg` entfernen** (`setup.cfg:30`)
 
   ```ini
   install_requires =
@@ -276,7 +276,7 @@
 
 ### Code-Qualität
 
-- [ ] **3.1 – Frühzeitig prüfen ob Token vorhanden** (`dnsjinja.py:89`)
+- [x] **3.1 – Frühzeitig prüfen ob Token vorhanden** (`dnsjinja.py:89`)
 
   Der `hcloud.Client` wird immer initialisiert, auch ohne Token.
   `_prepare_zones()` schlägt dann mit einem kryptischen API-Fehler fehl
@@ -294,7 +294,7 @@
 
 ---
 
-- [ ] **3.2 – Spezifische Exception-Typen statt `except Exception`** (`dnsjinja.py:49,61,78,144,173,207`)
+- [x] **3.2 – Spezifische Exception-Typen statt `except Exception`** (`dnsjinja.py:49,61,78,144,173,207`)
 
   Konkrete Typen fangen erwartete Fehler ab; `Exception` als Fallback
   bleibt möglich, sollte aber explizit kommentiert sein:
@@ -324,7 +324,7 @@
 
 ---
 
-- [ ] **3.3 – DNS-Resolver einmal in `__init__` anlegen** (`dnsjinja.py:139`)
+- [x] **3.3 – DNS-Resolver einmal in `__init__` anlegen** (`dnsjinja.py:139`)
 
   ```python
   # __init__ – einmalig anlegen (nach _prepare_zones, da name-servers aus config):
@@ -342,7 +342,7 @@
 
 ---
 
-- [ ] **3.4 – Erfolgsmeldung in `write_zone_files()` außerhalb des `with`-Blocks** (`dnsjinja.py:170–172`)
+- [x] **3.4 – Erfolgsmeldung in `write_zone_files()` außerhalb des `with`-Blocks** (`dnsjinja.py:170–172`)
 
   Beide `print()`-Aufrufe sind aktuell gleich weit eingerückt, obwohl
   nur einer in die Datei schreibt. Den zweiten nach außen verschieben:
@@ -361,7 +361,7 @@
 
 ---
 
-- [ ] **3.5 – Mindest-Versionen für Abhängigkeiten** (`setup.cfg`)
+- [x] **3.5 – Mindest-Versionen für Abhängigkeiten** (`setup.cfg`)
 
   ```ini
   install_requires =
@@ -376,7 +376,7 @@
 
 ---
 
-- [ ] **3.6 – `$schema` auf HTTPS umstellen** (`dnsjinja_config_schema.py:2`)
+- [x] **3.6 – `$schema` auf HTTPS umstellen** (`dnsjinja_config_schema.py:2`)
 
   ```python
   # vorher:

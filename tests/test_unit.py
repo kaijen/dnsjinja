@@ -4,6 +4,7 @@ Alle Hetzner-API-Aufrufe und DNS-Abfragen sind gemockt.
 Keine Netzwerkverbindung erforderlich.
 """
 import pytest
+import hcloud
 from unittest.mock import MagicMock, call
 from pathlib import Path
 
@@ -76,7 +77,9 @@ class TestPrepareZones:
     ):
         """Schlägt das Anlegen fehl, wird die Domain mit Meldung übersprungen."""
         config_path = write_config(data_dir, ['fehler.de'])
-        mock_client.zones.create.side_effect = Exception('API-Fehler')
+        mock_client.zones.create.side_effect = hcloud.APIException(
+            code=422, message='API-Fehler', details={}
+        )
 
         dj = make_dnsjinja(
             data_dir, config_path, mock_client, mock_dns_resolver,
@@ -141,7 +144,9 @@ class TestUploadZone:
         self, data_dir, config_file, mock_client, mock_dns_resolver
     ):
         """Bei Upload-Fehler wird UploadError geworfen und Exit-Code 254 geschrieben."""
-        mock_client.zones.import_zonefile.side_effect = Exception('Verbindungsfehler')
+        mock_client.zones.import_zonefile.side_effect = hcloud.APIException(
+            code=500, message='Verbindungsfehler', details={}
+        )
         dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver, upload=True)
 
         with pytest.raises(UploadError):
@@ -159,7 +164,7 @@ class TestUploadZone:
 
         def import_side_effect(zone, zonefile):
             if zone.name == 'fail.de':
-                raise Exception('Fehler')
+                raise hcloud.APIException(code=500, message='Fehler', details={})
 
         mock_client.zones.import_zonefile.side_effect = import_side_effect
         config_path = write_config(data_dir, ['ok.de', 'fail.de'])
@@ -216,7 +221,9 @@ class TestBackupZone:
         self, data_dir, config_file, mock_client, mock_dns_resolver, capsys
     ):
         """Bei Backup-Fehler wird eine Fehlermeldung ausgegeben, keine Exception geworfen."""
-        mock_client.zones.export_zonefile.side_effect = Exception('Netzwerkfehler')
+        mock_client.zones.export_zonefile.side_effect = hcloud.APIException(
+            code=500, message='Netzwerkfehler', details={}
+        )
         dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver, backup=True)
 
         dj.backup_zone('example.com')  # darf nicht werfen
@@ -345,3 +352,35 @@ class TestZoneSerial:
         files = list((data_dir / 'zone-files').iterdir())
         serial_in_name = files[0].name.split('.')[-1]
         assert serial_in_name == dj._serials['example.com']
+
+
+# ---------------------------------------------------------------------------
+# Token-Prüfung & Pfad-Validierung
+# ---------------------------------------------------------------------------
+
+class TestTokenUndPfad:
+
+    def test_kein_token_bricht_mit_exit_1_ab(
+        self, data_dir, config_file, mock_client, mock_dns_resolver, capsys
+    ):
+        """Ohne API-Token bricht __init__ frühzeitig mit sys.exit(1) ab."""
+        with pytest.raises(SystemExit) as exc_info:
+            DNSJinja(
+                datadir=str(data_dir),
+                config_file=str(config_file),
+                auth_api_token='',
+            )
+        assert exc_info.value.code == 1
+        assert 'API-Token' in capsys.readouterr().out
+
+    def test_config_datei_statt_verzeichnis_bricht_ab(
+        self, data_dir, mock_client, mock_dns_resolver, capsys
+    ):
+        """Wenn config_file ein Verzeichnis ist (nicht eine Datei), endet init mit exit(1)."""
+        with pytest.raises(SystemExit) as exc_info:
+            DNSJinja(
+                datadir=str(data_dir),
+                config_file=str(data_dir / 'config'),  # Verzeichnis statt Datei
+                auth_api_token='test-token',
+            )
+        assert exc_info.value.code == 1

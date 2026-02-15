@@ -2,11 +2,12 @@ from jinja2 import Environment, FileSystemLoader
 from socket import gethostbyname
 from pathlib import Path
 from datetime import datetime, timezone
+import hcloud
 from hcloud import Client
-import getpass
 import json
 import os
 import dns.resolver
+import dns.exception
 import click
 import sys
 import jsonschema
@@ -30,8 +31,18 @@ class DNSJinja:
         path_to_check = Path(path_to_check)
         if not path_to_check.is_absolute():
             path_to_check = Path(basedir) / path_to_check
-        if not path_to_check.exists():
-            print(f'{typ} {path_to_check} existiert nicht.')
+        if not path_to_check.is_dir():
+            print(f'{typ} {path_to_check} existiert nicht oder ist kein Verzeichnis.')
+            sys.exit(1)
+        return path_to_check
+
+    @staticmethod
+    def _check_file(path_to_check: str, basedir: str, typ: str) -> Path:
+        path_to_check = Path(path_to_check)
+        if not path_to_check.is_absolute():
+            path_to_check = Path(basedir) / path_to_check
+        if not path_to_check.is_file():
+            print(f'{typ} {path_to_check} existiert nicht oder ist keine Datei.')
             sys.exit(1)
         return path_to_check
 
@@ -48,7 +59,7 @@ class DNSJinja:
                         response = self.client.zones.create(name=d, mode="primary")
                         hetzner_zones[d] = response.zone
                         print(f'{d} wurde neu bei Hetzner angelegt')
-                    except Exception as e:
+                    except hcloud.APIException as e:
                         print(f'{d} konnte bei Hetzner nicht angelegt werden: {e} - wird ignoriert')
                         del self.config['domains'][d]
                 else:
@@ -60,13 +71,13 @@ class DNSJinja:
                 self.config['domains'][d]['zone-id'] = hetzner_zones[d].id
                 self.config['domains'][d]['zone-file'] = d + '.zone'
                 self._hetzner_zones[d] = hetzner_zones[d]
-        except Exception as e:
+        except (hcloud.HCloudException, OSError) as e:
             print(f'Zonen bei Hetzner konnten nicht ermittelt werden: {e}')
             sys.exit(1)
 
     def __init__(self, upload=False, backup=False, write_zone=False, datadir="", config_file="config/config.json", auth_api_token="", create_missing=False):
         self.datadir = DNSJinja._check_dir(datadir, '.', 'Datenverzeichnis')
-        self.config_file = DNSJinja._check_dir(config_file, '.', 'Konfigurationsdatei')
+        self.config_file = DNSJinja._check_file(config_file, '.', 'Konfigurationsdatei')
 
         self.exit_status_file = Path(tempfile.gettempdir()) / f"dnsjinja.{os.getpid()}.exit.txt"
         self.exit_status_file.unlink(missing_ok=True)
@@ -80,8 +91,8 @@ class DNSJinja:
         try:
             with open(self.config_file, encoding='utf-8') as cfg_fh:
                 self.config = json.load(cfg_fh)
-            jsonschema.validate(self.config, self.config_schema)
-        except Exception as e:
+            jsonschema.validate(self.config, self.config_schema, cls=jsonschema.Draft7Validator)
+        except (json.JSONDecodeError, jsonschema.ValidationError, OSError) as e:
             print(f'Konfigurationsdatei {self.config_file} konnte nicht korrekt gelesen werden: {str(e)}')
             sys.exit(1)
 
@@ -93,12 +104,18 @@ class DNSJinja:
         self.zone_backups_dir = DNSJinja._check_dir(self.config['global']['zone-backups'], self.datadir, 'Zone-Backup-Verzeichnis')
 
         self.auth_api_token = auth_api_token
-        api_base = self.config['global'].get('dns-api-base', self.DEFAULT_API_BASE).rstrip('/')
-        self.client = Client(token=self.auth_api_token, api_endpoint=api_base)
+        if not self.auth_api_token:
+            print('Kein API-Token angegeben. Bitte --auth-api-token oder DNSJINJA_AUTH_API_TOKEN setzen.')
+            sys.exit(1)
+        self._api_base = self.config['global'].get('dns-api-base', self.DEFAULT_API_BASE).rstrip('/')
+        self.client = Client(token=self.auth_api_token, api_endpoint=self._api_base)
         self._hetzner_zones = {}
         self._create_missing = create_missing
 
         self._prepare_zones()
+
+        self._resolver = dns.resolver.Resolver(configure=False)
+        self._resolver.nameservers = self.config["global"]["name-servers"]
 
         self._today = datetime.now(timezone.utc).strftime('%Y%m%d')
         self._upload = upload
@@ -143,12 +160,11 @@ class DNSJinja:
         self._write_zone = new_status
 
     def _get_zone_serial(self, domain: str) -> str:
-        hetzner_resolver = dns.resolver.Resolver(configure=False)
-        hetzner_resolver.nameservers = self.config["global"]["name-servers"]
         try:
-            r = hetzner_resolver.resolve(domain, "SOA")
+            r = self._resolver.resolve(domain, "SOA")
             return str(r[0].serial)
-        except Exception as e:
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer,
+                dns.resolver.NoNameservers, dns.exception.DNSException) as e:
             print(f"Fehler beim Ermitteln des SOA-Zählers: {str(e)}")
             sys.exit(1)
 
@@ -182,8 +198,8 @@ class DNSJinja:
             try:
                 with open(zonefile, 'w', encoding='utf-8') as zf:
                     print(self.zones[domain], file=zf)
-                    print(f'Domäne {domain} wurde erfolgreich geschrieben')
-            except Exception as e:
+                print(f'Domäne {domain} wurde erfolgreich geschrieben')
+            except OSError as e:
                 print(f'Domäne {domain} konnte nicht geschrieben werden: {str(e)}')
 
     def upload_zone(self, domain: str) -> None:
@@ -191,7 +207,7 @@ class DNSJinja:
         try:
             self.client.zones.import_zonefile(zone, self.zones[domain])
             print(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
-        except Exception as e:
+        except hcloud.APIException as e:
             with open(self.exit_status_file, "w", encoding="utf8") as exit_code_file:
                 exit_code_file.write("254")
             raise UploadError(f'\nDomain: {domain}\nError Message: {e}')
@@ -199,9 +215,6 @@ class DNSJinja:
     def upload_zones(self) -> None:
         if not self.upload:
             return
-        if not self.auth_api_token:
-            self.auth_api_token = getpass.getpass("Auth-API-Token: ")
-            self.client = Client(token=self.auth_api_token)
         for domain, d in self.config["domains"].items():
             try:
                 self.upload_zone(domain)
@@ -217,15 +230,12 @@ class DNSJinja:
             with open(backupfile, 'w', encoding='utf-8') as zf:
                 print(response.zonefile, file=zf)
             print(f'Domäne {domain} wurde erfolgreich gesichert')
-        except Exception as e:
+        except (hcloud.APIException, OSError) as e:
             print(f'Domäne {domain} konnte nicht gesichert werden: {str(e)}')
 
     def backup_zones(self) -> None:
         if not self.backup:
             return
-        if not self.auth_api_token:
-            self.auth_api_token = getpass.getpass("Auth-API-Token: ")
-            self.client = Client(token=self.auth_api_token)
         for domain, d in self.config["domains"].items():
             self.backup_zone(domain)
 
@@ -247,7 +257,6 @@ def run(upload, backup, write, datadir, config, auth_api_token, create_missing):
 
 
 def main():
-    global exit_status
     load_env()
     run()
 
