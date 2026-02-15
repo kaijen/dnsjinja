@@ -18,7 +18,7 @@ Grundlage: Quellcode-Analyse aller Dateien unter `src/dnsjinja/` und `tests/`
 
 ## 1  Security
 
-### 1.1  API-Token über `input()` – sichtbar im Terminal 🔴
+### 1.1  API-Token über `input()` – sichtbar im Terminal 🔴 ✅
 **Datei:** `src/dnsjinja/dnsjinja.py`, Zeilen 190, 214
 
 ```python
@@ -33,7 +33,7 @@ in der Python-Standardbibliothek enthalten und maskiert die Eingabe.
 
 ---
 
-### 1.2  Vorhersehbarer Pfad der Exit-Code-Datei – TOCTOU 🟠
+### 1.2  Vorhersehbarer Pfad der Exit-Code-Datei – TOCTOU 🟠 ✅
 **Dateien:** `src/dnsjinja/dnsjinja.py` Z. 69, 182–183; `src/dnsjinja/exit_on_error.py` Z. 8–12
 
 ```python
@@ -51,7 +51,7 @@ oder `tempfile.NamedTemporaryFile(delete=False, mode=0o600)` nutzen.
 
 ---
 
-### 1.3  `http://` als API-Endpunkt erlaubt 🟠
+### 1.3  `http://` als API-Endpunkt erlaubt 🟠 ✅
 **Datei:** `src/dnsjinja/dnsjinja_config_schema.py`, Zeile 71
 
 ```json
@@ -67,7 +67,7 @@ der Bearer-Token im Klartext übertragen (Man-in-the-Middle).
 
 ## 2  Bugs
 
-### 2.1  Falsche Variable in Fehlermeldung – Dateiname statt Objekt 🔴
+### 2.1  Falsche Variable in Fehlermeldung – Dateiname statt Objekt 🔴 ✅
 **Datei:** `src/dnsjinja/dnsjinja.py`, Zeile 75 + 79
 
 ```python
@@ -89,7 +89,7 @@ umbenennen, z. B. `as cfg_fh`.
 
 ---
 
-### 2.2  SOA-Seriennummer-Überlauf bei Suffix 99 🔴
+### 2.2  SOA-Seriennummer-Überlauf bei Suffix 99 🔴 ✅
 **Datei:** `src/dnsjinja/dnsjinja.py`, Zeile 152
 
 ```python
@@ -110,7 +110,7 @@ oder besser: eine Warnung ausgeben und ggf. `sys.exit(1)`, wenn bereits 99
 
 ---
 
-### 2.3  Zwei verschiedene Seriennummern für Dateiinhalt und Dateiname 🔴
+### 2.3  Zwei verschiedene Seriennummern für Dateiinhalt und Dateiname 🔴 ✅
 **Datei:** `src/dnsjinja/dnsjinja.py`, Zeilen 161, 168
 
 ```python
@@ -133,7 +133,7 @@ Instanzvariable `self._serials: dict[str, str]` cachen.
 
 ---
 
-### 2.4  `_check_dir` prüft nicht, ob der Pfad ein Verzeichnis ist 🟠
+### 2.4  `_check_dir` prüft nicht, ob der Pfad ein Verzeichnis ist 🟠 ✅
 **Datei:** `src/dnsjinja/dnsjinja.py`, Zeile 31
 
 ```python
@@ -155,7 +155,7 @@ if not path_to_check.is_dir():
 
 ---
 
-### 2.5  `patternProperties` im JSON-Schema falsch geschrieben 🟠
+### 2.5  `patternProperties` im JSON-Schema falsch geschrieben 🟠 ✅
 **Datei:** `src/dnsjinja/dnsjinja_config_schema.py`, Zeile 106
 
 ```python
@@ -172,7 +172,7 @@ Validierung, bricht aber später mit einem `KeyError` ab.
 
 ---
 
-### 2.6  Interaktiv eingegebenes Token ignoriert `dns-api-base` 🟠
+### 2.6  Interaktiv eingegebenes Token ignoriert `dns-api-base` 🟠 ✅
 **Datei:** `src/dnsjinja/dnsjinja.py`, Zeilen 191, 215
 
 ```python
@@ -192,7 +192,7 @@ self.client = Client(token=self.auth_api_token, api_endpoint=api_base)
 
 ---
 
-### 2.7  `global exit_status` in `main()` – toter Code 🟡
+### 2.7  `global exit_status` in `main()` – toter Code 🟡 ✅
 **Datei:** `src/dnsjinja/dnsjinja.py`, Zeile 237
 
 ```python
@@ -209,7 +209,7 @@ verwendet. Das `global`-Statement hat keine Wirkung und ist irreführend.
 
 ---
 
-### 2.8  `python-dotenv` doppelt in `setup.cfg` 🟡
+### 2.8  `python-dotenv` doppelt in `setup.cfg` 🟡 ✅
 **Datei:** `setup.cfg`, Zeilen 27 und 30
 
 ```ini
@@ -224,7 +224,7 @@ verwendet. Das `global`-Statement hat keine Wirkung und ist irreführend.
 
 ## 3  Code-Qualität
 
-### 3.1  `input()` ohne Token-Prüfung vor API-Initialisierung 🟠
+### 3.1  `input()` ohne Token-Prüfung vor API-Initialisierung 🟠 ✅
 **Datei:** `src/dnsjinja/dnsjinja.py`, Zeilen 89–91
 
 Der `Client` wird in `__init__` mit einem möglicherweise leeren Token
@@ -240,7 +240,7 @@ wird.
 
 ---
 
-### 3.2  `except Exception` zu breit – maskiert Debugging-Informationen 🟡
+### 3.2  `except Exception` zu breit – maskiert Debugging-Informationen 🟡 ✅
 **Datei:** `src/dnsjinja/dnsjinja.py`, Zeilen 49, 61, 78, 144, 173, 207
 
 Alle Fehlerbehandlungen fangen `Exception` als Sammelkategorie ab. Dadurch
@@ -260,7 +260,7 @@ nicht ermittelt werden: 'DNSJinja' object has no attribute 'xyz'".
 
 ---
 
-### 3.3  DNS-Resolver wird bei jedem SOA-Aufruf neu instanziiert 🟡
+### 3.3  DNS-Resolver wird bei jedem SOA-Aufruf neu instanziiert 🟡 ✅
 **Datei:** `src/dnsjinja/dnsjinja.py`, Zeile 139
 
 ```python
@@ -278,7 +278,7 @@ das 2N Resolver-Instanzen.
 
 ---
 
-### 3.4  `write_zone_files()` meldet Erfolg, bevor `print()` überhaupt schreibt 🟡
+### 3.4  `write_zone_files()` meldet Erfolg, bevor `print()` überhaupt schreibt 🟡 ✅
 **Datei:** `src/dnsjinja/dnsjinja.py`, Zeilen 170–172
 
 ```python
@@ -298,7 +298,7 @@ Tatsächlich schreibt nur der erste in die Datei; der zweite gibt auf
 
 ---
 
-### 3.5  Fehlende Versionsgrenzen für Abhängigkeiten 🟡
+### 3.5  Fehlende Versionsgrenzen für Abhängigkeiten 🟡 ✅
 **Datei:** `setup.cfg`, Zeilen 22–30
 
 Keine einzige Abhängigkeit hat eine Versionsschranke (`>=`, `<`). Breaking
@@ -318,7 +318,7 @@ appdirs>=1.4
 
 ---
 
-### 3.6  `$schema`-URL im JSON-Schema ist HTTP statt HTTPS 🟡
+### 3.6  `$schema`-URL im JSON-Schema ist HTTP statt HTTPS 🟡 ✅
 **Datei:** `src/dnsjinja/dnsjinja_config_schema.py`, Zeile 2
 
 ```python
@@ -368,25 +368,25 @@ Sandbox, aber ein explizites Whitelist-Pattern
 
 ## Zusammenfassung
 
-| # | Schweregrad | Datei / Zeile | Kurzbeschreibung |
-|---|-------------|---------------|-----------------|
-| 1.1 | 🔴 | `dnsjinja.py:190,214` | Token über `input()` sichtbar im Terminal |
-| 1.2 | 🟠 | `dnsjinja.py:69`, `exit_on_error.py:8` | Vorhersehbarer Tmp-Dateiname (TOCTOU) |
-| 1.3 | 🟠 | `dnsjinja_config_schema.py:71` | `http://`-Endpunkt erlaubt |
-| 2.1 | 🔴 | `dnsjinja.py:75,79` | `config_file`-Variable schattiert → Fehlermeldung zeigt File-Handle |
-| 2.2 | 🔴 | `dnsjinja.py:152` | SOA-Serial-Überlauf bei Suffix 99 |
-| 2.3 | 🔴 | `dnsjinja.py:161,168` | Dateiinhalt und Dateiname können verschiedene Serials haben |
-| 2.4 | 🟠 | `dnsjinja.py:31` | `_check_dir` prüft nicht `is_dir()` |
-| 2.5 | 🟠 | `dnsjinja_config_schema.py:106` | `pattern_properties` statt `patternProperties` → Schema-Validierung greift nicht |
-| 2.6 | 🟠 | `dnsjinja.py:191,215` | Interaktiver Client ohne `api_endpoint` |
-| 2.7 | 🟡 | `dnsjinja.py:237` | `global exit_status` – toter Code |
-| 2.8 | 🟡 | `setup.cfg:30` | `python-dotenv` doppelt |
-| 3.1 | 🟠 | `dnsjinja.py:89` | Leeres Token initialisiert Client vor Prüfung |
-| 3.2 | 🟡 | `dnsjinja.py:49,61,78,144,173,207` | `except Exception` zu breit |
-| 3.3 | 🟡 | `dnsjinja.py:139` | DNS-Resolver wird pro Aufruf neu erstellt |
-| 3.4 | 🟡 | `dnsjinja.py:172` | Erfolgsmeldung irreführend eingerückt |
-| 3.5 | 🟡 | `setup.cfg:22–30` | Keine Versionsgrenzen für Abhängigkeiten |
-| 3.6 | 🟡 | `dnsjinja_config_schema.py:2` | `$schema` HTTP statt HTTPS |
+| # | Schweregrad | Datei / Zeile | Kurzbeschreibung | Status |
+|---|-------------|---------------|-----------------|--------|
+| 1.1 | 🔴 | `dnsjinja.py:190,214` | Token über `input()` sichtbar im Terminal | ✅ |
+| 1.2 | 🟠 | `dnsjinja.py:69`, `exit_on_error.py:8` | Vorhersehbarer Tmp-Dateiname (TOCTOU) | ✅ |
+| 1.3 | 🟠 | `dnsjinja_config_schema.py:71` | `http://`-Endpunkt erlaubt | ✅ |
+| 2.1 | 🔴 | `dnsjinja.py:75,79` | `config_file`-Variable schattiert → Fehlermeldung zeigt File-Handle | ✅ |
+| 2.2 | 🔴 | `dnsjinja.py:152` | SOA-Serial-Überlauf bei Suffix 99 | ✅ |
+| 2.3 | 🔴 | `dnsjinja.py:161,168` | Dateiinhalt und Dateiname können verschiedene Serials haben | ✅ |
+| 2.4 | 🟠 | `dnsjinja.py:31` | `_check_dir` prüft nicht `is_dir()` | ✅ |
+| 2.5 | 🟠 | `dnsjinja_config_schema.py:106` | `pattern_properties` statt `patternProperties` → Schema-Validierung greift nicht | ✅ |
+| 2.6 | 🟠 | `dnsjinja.py:191,215` | Interaktiver Client ohne `api_endpoint` | ✅ |
+| 2.7 | 🟡 | `dnsjinja.py:237` | `global exit_status` – toter Code | ✅ |
+| 2.8 | 🟡 | `setup.cfg:30` | `python-dotenv` doppelt | ✅ |
+| 3.1 | 🟠 | `dnsjinja.py:89` | Leeres Token initialisiert Client vor Prüfung | ✅ |
+| 3.2 | 🟡 | `dnsjinja.py:49,61,78,144,173,207` | `except Exception` zu breit | ✅ |
+| 3.3 | 🟡 | `dnsjinja.py:139` | DNS-Resolver wird pro Aufruf neu erstellt | ✅ |
+| 3.4 | 🟡 | `dnsjinja.py:172` | Erfolgsmeldung irreführend eingerückt | ✅ |
+| 3.5 | 🟡 | `setup.cfg:22–30` | Keine Versionsgrenzen für Abhängigkeiten | ✅ |
+| 3.6 | 🟡 | `dnsjinja_config_schema.py:2` | `$schema` HTTP statt HTTPS | ✅ |
 
 ---
 
