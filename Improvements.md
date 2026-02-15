@@ -16,144 +16,6 @@ Grundlage: Quellcode-Analyse aller Dateien unter `src/dnsjinja/` und `tests/`
 
 ---
 
-## 1  Code-Vereinfachung
-
-### 1.1  `_check_dir` / `_check_file` zusammenführen 🟡
-**Datei:** `src/dnsjinja/dnsjinja.py:29–47`
-
-```python
-@staticmethod
-def _check_dir(path_to_check: str, basedir: str, typ: str) -> Path:
-    ...
-    if not path_to_check.is_dir():
-        print(f'{typ} {path_to_check} existiert nicht oder ist kein Verzeichnis.')
-
-@staticmethod
-def _check_file(path_to_check: str, basedir: str, typ: str) -> Path:
-    ...
-    if not path_to_check.is_file():
-        print(f'{typ} {path_to_check} existiert nicht oder ist keine Datei.')
-```
-
-Die beiden Methoden sind zu 95% identisch – nur die Prüfmethode und das
-Fehlerwort unterscheiden sich. Code-Duplikation, die bei Änderungen
-(z. B. Fehlerformat) doppelt gepflegt werden muss.
-
-**Empfehlung:** Eine gemeinsame `_check_path()`-Methode:
-```python
-@staticmethod
-def _check_path(path: str, basedir: str, typ: str, expect: str = 'dir') -> Path:
-    p = Path(path)
-    if not p.is_absolute():
-        p = Path(basedir) / p
-    valid = p.is_dir() if expect == 'dir' else p.is_file()
-    if not valid:
-        kind = 'Verzeichnis' if expect == 'dir' else 'Datei'
-        print(f'{typ} {p} existiert nicht oder ist kein(e) {kind}.')
-        sys.exit(1)
-    return p
-```
-
----
-
-### 1.2  Redundantes `hetzner_domains`-Set in `_prepare_zones()` 🟡
-**Datei:** `src/dnsjinja/dnsjinja.py:53–55`
-
-```python
-hetzner_domains = set(z.name for z in all_zones)    # Set aus Zone-Namen
-hetzner_zones = {z.name: z for z in all_zones}       # Dict Name → Zone
-```
-
-Beide werden aus derselben Liste aufgebaut. `hetzner_zones.keys()` ist ein
-`KeysView` der sich exakt wie ein Set verhält; `hetzner_domains` ist
-überflüssig.
-
-**Empfehlung:** `hetzner_domains` entfernen, stattdessen direkt
-`hetzner_zones.keys()` für die Set-Operationen verwenden:
-```python
-hetzner_zones = {z.name: z for z in all_zones}
-config_domains = set(self.config['domains'].keys())
-for d in sorted(config_domains - hetzner_zones.keys()):
-    ...
-for d in (hetzner_zones.keys() - config_domains):
-    ...
-```
-
----
-
-### 1.3  `UploadError.msgfmt` – toter Code 🟡
-**Datei:** `src/dnsjinja/dnsjinja.py:19–22`
-
-```python
-class UploadError(Exception):
-    def __init__(self, message):
-        super().__init__(message)
-        self.msgfmt = message    # ← wird nirgends gelesen
-```
-
-`self.msgfmt` wird in der gesamten Codebasis nie ausgelesen.
-`Exception.__init__(message)` speichert die Message bereits unter `args[0]`
-und ist über `str(e)` erreichbar.
-
-**Empfehlung:**
-```python
-class UploadError(Exception):
-    pass
-```
-
----
-
-### 1.4  Unbenutzte Loop-Variable `d` 🟡
-**Datei:** `src/dnsjinja/dnsjinja.py:218,239`
-
-```python
-for domain, d in self.config["domains"].items():   # d nie genutzt
-    self.upload_zone(domain)
-...
-for domain, d in self.config["domains"].items():   # d nie genutzt
-    self.backup_zone(domain)
-```
-
-`d` (der Domain-Config-Dict) wird in `upload_zones()` und `backup_zones()`
-nie gelesen. Linter wie `ruff` oder `pylint` warnen darüber.
-
-**Empfehlung:**
-```python
-for domain in self.config["domains"]:
-    self.upload_zone(domain)
-```
-
----
-
-### 1.5  Properties ohne Validierungslogik 🟡
-**Datei:** `src/dnsjinja/dnsjinja.py:134–160`
-
-```python
-@property
-def upload(self) -> bool:
-    return self._upload
-
-@upload.setter
-def upload(self, new_status: bool) -> None:
-    self._upload = new_status
-```
-
-Die drei Properties für `upload`, `backup` und `write_zone` sind reine
-Getter/Setter ohne jede Validierungs- oder Konvertierungslogik. Sie führen
-`_upload`/`_backup`/`_write_zone` als private Attribute ein, die nur einen
-zusätzlichen Indirektion-Layer erzeugen.
-
-**Empfehlung:** Direkte öffentliche Attribute in `__init__`:
-```python
-self.upload = upload
-self.backup = backup
-self.write_zone = write_zone
-```
-Sollte später Validierung nötig werden, können die Properties dann eingeführt
-werden (kein Breaking Change).
-
----
-
 ## 2  Robustheit
 
 ### 2.1  `exit_on_error.py` – `int(ec)` ohne Fehlerbehandlung 🟠
@@ -523,11 +385,6 @@ Dies wäre ein vorbereitender Schritt für eine eventuelle Pydantic-Migration
 
 | # | Schweregrad | Datei / Zeile | Kurzbeschreibung |
 |---|-------------|---------------|-----------------|
-| 1.1 | 🟡 | `dnsjinja.py:29–47` | `_check_dir`/`_check_file` zusammenführen |
-| 1.2 | 🟡 | `dnsjinja.py:53–55` | Redundantes `hetzner_domains`-Set |
-| 1.3 | 🟡 | `dnsjinja.py:19–22` | `UploadError.msgfmt` toter Code |
-| 1.4 | 🟡 | `dnsjinja.py:218,239` | Unbenutzte Loop-Variable `d` |
-| 1.5 | 🟡 | `dnsjinja.py:134–160` | Properties ohne Logik |
 | 2.1 | 🟠 | `exit_on_error.py:26` | `int(ec)` ohne Fehlerbehandlung |
 | 2.3 | 🟡 | `dnsjinja_config_schema.py:82` | `additionalItems` wirkungslos |
 | 2.4 | 🟡 | `dnsjinja_config_schema.py:85–94` | `anyOf` mit einem Element |
@@ -535,8 +392,6 @@ Dies wäre ein vorbereitender Schritt für eine eventuelle Pydantic-Migration
 | 3.2 | 🟡 | `__init__.py` | `__version__` und `__all__` fehlen |
 | 3.3 | 🟡 | `test_unit.py` | Testlücke: Schema-Validierung |
 | 3.4 | 🟡 | `test_unit.py` | Testlücke: Template-Rendering |
-| M.1 | 🟠 | `myloadenv.py:1,14` | `appdirs` (abandoned) → `platformdirs` |
-| M.2 | 🟡 | `myloadenv.py:16` | `Path().absolute()` → `Path.cwd()` |
 | M.3 | 🟡 | `setup.cfg` | `setup.cfg` → `pyproject.toml` (PEP 621) |
 | M.4 | 🟡 | `exit_on_error.py:21–22` | `open()` → `Path.read_text()` |
 | M.5 | 🟡 | `dnsjinja.py` (alle) | `print()` → `click.echo()` |

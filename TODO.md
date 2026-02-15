@@ -411,6 +411,16 @@
 
 ---
 
+### Code-Vereinfachung (Abschnitt 1)
+
+- [x] **1.1 – `_check_dir` / `_check_file` zusammenführen** (`dnsjinja.py:33–51`)
+- [x] **1.2 – Redundantes `hetzner_domains`-Set entfernen** (`dnsjinja.py:57–72`)
+- [x] **1.3 – `UploadError.msgfmt` – toter Code** (`dnsjinja.py:23–26`)
+- [x] **1.4 – Unbenutzte Loop-Variable `d`** (`dnsjinja.py:234,255`)
+- [x] **1.5 – Properties ohne Validierungslogik entfernen** (`dnsjinja.py:138–164`)
+
+---
+
 ### Myloadenv – .env-Ladereihenfolge
 
 - [x] **2.2 – Korrekte Kaskadenreihenfolge in `myloadenv.py`** (`myloadenv.py:33–37`)

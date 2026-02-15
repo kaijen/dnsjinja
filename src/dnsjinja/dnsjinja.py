@@ -21,9 +21,7 @@ _TEMPLATE_NAME_RE = re.compile(r'^[a-zA-Z0-9._-]+$')
 
 
 class UploadError(Exception):
-    def __init__(self, message):
-        super().__init__(message)
-        self.msgfmt = message
+    pass
 
 
 class DNSJinja:
@@ -31,33 +29,24 @@ class DNSJinja:
     DEFAULT_API_BASE = "https://api.hetzner.cloud/v1"
 
     @staticmethod
-    def _check_dir(path_to_check: str, basedir: str, typ: str) -> Path:
-        path_to_check = Path(path_to_check)
-        if not path_to_check.is_absolute():
-            path_to_check = Path(basedir) / path_to_check
-        if not path_to_check.is_dir():
-            print(f'{typ} {path_to_check} existiert nicht oder ist kein Verzeichnis.')
+    def _check_path(path: str, basedir: str, typ: str, expect: str = 'dir') -> Path:
+        p = Path(path)
+        if not p.is_absolute():
+            p = Path(basedir) / p
+        valid = p.is_dir() if expect == 'dir' else p.is_file()
+        if not valid:
+            kind = 'Verzeichnis' if expect == 'dir' else 'Datei'
+            print(f'{typ} {p} existiert nicht oder ist kein(e) {kind}.')
             sys.exit(1)
-        return path_to_check
-
-    @staticmethod
-    def _check_file(path_to_check: str, basedir: str, typ: str) -> Path:
-        path_to_check = Path(path_to_check)
-        if not path_to_check.is_absolute():
-            path_to_check = Path(basedir) / path_to_check
-        if not path_to_check.is_file():
-            print(f'{typ} {path_to_check} existiert nicht oder ist keine Datei.')
-            sys.exit(1)
-        return path_to_check
+        return p
 
     def _prepare_zones(self) -> None:
         try:
             all_zones = self.client.zones.get_all()
 
-            hetzner_domains = set(z.name for z in all_zones)
-            config_domains = set(self.config['domains'].keys())
             hetzner_zones = {z.name: z for z in all_zones}
-            for d in sorted(config_domains - hetzner_domains):
+            config_domains = set(self.config['domains'].keys())
+            for d in sorted(config_domains - hetzner_zones.keys()):
                 if self._create_missing:
                     try:
                         response = self.client.zones.create(name=d, mode="primary")
@@ -69,7 +58,7 @@ class DNSJinja:
                 else:
                     print(f'{d} ist konfiguriert aber nicht bei Hetzner eingerichtet - wird ignoriert')
                     del self.config['domains'][d]
-            for d in (hetzner_domains - config_domains):
+            for d in (hetzner_zones.keys() - config_domains):
                 print(f'{d} ist bei Hetzner eingerichtet aber nicht konfiguriert - bitte prüfen')
             for d in self.config['domains'].keys():
                 self.config['domains'][d]['zone-id'] = hetzner_zones[d].id
@@ -80,8 +69,8 @@ class DNSJinja:
             sys.exit(1)
 
     def __init__(self, upload=False, backup=False, write_zone=False, datadir="", config_file="config/config.json", auth_api_token="", create_missing=False):
-        self.datadir = DNSJinja._check_dir(datadir, '.', 'Datenverzeichnis')
-        self.config_file = DNSJinja._check_file(config_file, '.', 'Konfigurationsdatei')
+        self.datadir = DNSJinja._check_path(datadir, '.', 'Datenverzeichnis', expect='dir')
+        self.config_file = DNSJinja._check_path(config_file, '.', 'Konfigurationsdatei', expect='file')
 
         self.exit_status_file = Path(tempfile.gettempdir()) / f"dnsjinja.{os.getpid()}.exit.txt"
         self.exit_status_file.unlink(missing_ok=True)
@@ -101,11 +90,11 @@ class DNSJinja:
             sys.exit(1)
 
         # noinspection PyTypeChecker
-        self.templates_dir = DNSJinja._check_dir(self.config['global']['templates'], self.datadir, 'Template-Verzeichnis')
+        self.templates_dir = DNSJinja._check_path(self.config['global']['templates'], self.datadir, 'Template-Verzeichnis', expect='dir')
         # noinspection PyTypeChecker
-        self.zone_files_dir = DNSJinja._check_dir(self.config['global']['zone-files'], self.datadir, 'Zone-File-Verzeichnis')
+        self.zone_files_dir = DNSJinja._check_path(self.config['global']['zone-files'], self.datadir, 'Zone-File-Verzeichnis', expect='dir')
         # noinspection PyTypeChecker
-        self.zone_backups_dir = DNSJinja._check_dir(self.config['global']['zone-backups'], self.datadir, 'Zone-Backup-Verzeichnis')
+        self.zone_backups_dir = DNSJinja._check_path(self.config['global']['zone-backups'], self.datadir, 'Zone-Backup-Verzeichnis', expect='dir')
 
         self.auth_api_token = auth_api_token
         if not self.auth_api_token:
@@ -122,9 +111,9 @@ class DNSJinja:
         self._resolver.nameservers = self.config["global"]["name-servers"]
 
         self._today = datetime.now(timezone.utc).strftime('%Y%m%d')
-        self._upload = upload
-        self._backup = backup
-        self._write_zone = write_zone
+        self.upload = upload
+        self.backup = backup
+        self.write_zone = write_zone
 
         self.env = Environment(
             loader=FileSystemLoader(self.templates_dir),
@@ -138,30 +127,6 @@ class DNSJinja:
     @property
     def today(self) -> str:
         return self._today
-
-    @property
-    def upload(self) -> bool:
-        return self._upload
-
-    @upload.setter
-    def upload(self, new_status: bool) -> None:
-        self._upload = new_status
-
-    @property
-    def backup(self) -> bool:
-        return self._backup
-
-    @backup.setter
-    def backup(self, new_status: bool) -> None:
-        self._backup = new_status
-
-    @property
-    def write_zone(self) -> bool:
-        return self._write_zone
-
-    @write_zone.setter
-    def write_zone(self, new_status: bool) -> None:
-        self._write_zone = new_status
 
     def _get_zone_serial(self, domain: str) -> str:
         try:
@@ -231,7 +196,7 @@ class DNSJinja:
     def upload_zones(self) -> None:
         if not self.upload:
             return
-        for domain, d in self.config["domains"].items():
+        for domain in self.config["domains"]:
             try:
                 self.upload_zone(domain)
             except UploadError as e:
@@ -252,7 +217,7 @@ class DNSJinja:
     def backup_zones(self) -> None:
         if not self.backup:
             return
-        for domain, d in self.config["domains"].items():
+        for domain in self.config["domains"]:
             self.backup_zone(domain)
 
     def dry_run(self) -> None:
