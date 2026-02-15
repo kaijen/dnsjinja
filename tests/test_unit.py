@@ -384,3 +384,46 @@ class TestTokenUndPfad:
                 auth_api_token='test-token',
             )
         assert exc_info.value.code == 1
+
+
+# ---------------------------------------------------------------------------
+# Schema-Validierung (3.3)
+# ---------------------------------------------------------------------------
+
+class TestConfigValidierung:
+
+    def test_config_ohne_template_schlaegt_fehl(
+        self, data_dir, mock_client, mock_dns_resolver
+    ):
+        """Config ohne Pflichtfeld 'template' wird vom Schema abgewiesen."""
+        import json
+        config_path = data_dir / 'config' / 'config.json'
+        config_path.write_text(json.dumps({
+            "global": {
+                "zone-files": "zone-files",
+                "zone-backups": "zone-backups",
+                "templates": "templates",
+                "name-servers": ["213.133.100.98"],
+            },
+            "domains": {"test.com": {}},   # kein 'template'
+        }), encoding='utf-8')
+        with pytest.raises(SystemExit) as exc_info:
+            DNSJinja(datadir=str(data_dir), config_file=str(config_path),
+                     auth_api_token='test-token')
+        assert exc_info.value.code == 1
+
+
+# ---------------------------------------------------------------------------
+# Template-Rendering (3.4)
+# ---------------------------------------------------------------------------
+
+class TestZoneRendering:
+
+    def test_template_variablen_werden_substituiert(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        """domain und soa_serial werden korrekt ins Zone-File gerendert."""
+        dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+        zone = dj.zones['example.com']
+        assert '$ORIGIN example.com.' in zone
+        assert dj._serials['example.com'] in zone

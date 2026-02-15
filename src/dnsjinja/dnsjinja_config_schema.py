@@ -79,19 +79,13 @@ DNSJINJA_JSON_SCHEMA = {
                     "title": "name-servers schema",
                     "description": "Name servers to ask for SOA serial",
                     "default": [],
-                    "additionalItems": True,
                     "items": {
                         "$id": "#/properties/global/properties/name-servers/items",
-                        "anyOf": [
-                            {
-                                "$id": "#/properties/global/properties/name-servers/items/anyOf/0",
-                                "type": "string",
-                                "title": "name-servers",
-                                "description": "Name server IP address",
-                                "format": "ipv4",
-                                "default": ""
-                            }
-                        ]
+                        "type": "string",
+                        "title": "name-servers",
+                        "description": "Name server IP address",
+                        "format": "ipv4",
+                        "default": ""
                     }
                 }
             },

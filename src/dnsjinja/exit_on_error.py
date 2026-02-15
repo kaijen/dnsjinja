@@ -21,9 +21,12 @@ def run(exit_file):
         sys.exit(0)
 
     if exit_code_file.exists():
-        with open(exit_code_file, "r", encoding="utf8") as ecf:
-            ec = ecf.read()
-        sys.exit(int(ec))
+        ec = exit_code_file.read_text(encoding='utf-8')
+        try:
+            sys.exit(int(ec.strip()))
+        except ValueError:
+            print(f'Ungültiger Exit-Code in Datei: {ec!r}', file=sys.stderr)
+            sys.exit(1)
     else:
         sys.exit(0)
 

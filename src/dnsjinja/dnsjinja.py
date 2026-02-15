@@ -68,7 +68,10 @@ class DNSJinja:
             print(f'Zonen bei Hetzner konnten nicht ermittelt werden: {e}')
             sys.exit(1)
 
-    def __init__(self, upload=False, backup=False, write_zone=False, datadir="", config_file="config/config.json", auth_api_token="", create_missing=False):
+    def __init__(self, upload: bool = False, backup: bool = False,
+                 write_zone: bool = False, datadir: str = "",
+                 config_file: str = "config/config.json",
+                 auth_api_token: str = "", create_missing: bool = False) -> None:
         self.datadir = DNSJinja._check_path(datadir, '.', 'Datenverzeichnis', expect='dir')
         self.config_file = DNSJinja._check_path(config_file, '.', 'Konfigurationsdatei', expect='file')
 

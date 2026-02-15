@@ -448,3 +448,39 @@
 - [x] **2.3 – `explore_hetzner.py` – Breites `except Exception`** (`explore_hetzner.py:25,30`)
 
   `except Exception` → `except hcloud.APIException` bzw. `except OSError`.
+
+---
+
+### Robustheit (Abschnitt 2 – Improvements.md)
+
+- [x] **2.1 – `exit_on_error.py` – `int(ec)` ohne Fehlerbehandlung** (`exit_on_error.py:26`)
+
+  `int(ec)` → `int(ec.strip())` mit `ValueError`-Abfang + `Path.read_text()` statt `open()`.
+
+- [x] **2.3 – JSON-Schema: `additionalItems: True` entfernen** (`dnsjinja_config_schema.py:82`)
+
+  Wirkungsloses Keyword bei `items`-Objekt gemäß JSON Schema Draft 7 entfernt.
+
+- [x] **2.4 – JSON-Schema: `anyOf` mit einem Element vereinfachen** (`dnsjinja_config_schema.py:85–94`)
+
+  `anyOf`-Wrapper mit einzelnem Element durch das direkte Schema-Objekt ersetzt.
+
+---
+
+### Wartbarkeit (Abschnitt 3 – Improvements.md)
+
+- [x] **3.1 – Type Hints für `__init__`** (`dnsjinja.py:71`)
+
+  Alle Parameter und Rückgabetyp annotiert: `bool`, `str`, `-> None`.
+
+- [x] **3.2 – `__version__` und `__all__` in `__init__.py`** (`__init__.py`)
+
+  `__version__ = '0.3.0'` und `__all__` ergänzt.
+
+- [x] **3.3 – Testlücke: Schema-Validierung** (`test_unit.py`)
+
+  Neuer Test `TestConfigValidierung.test_config_ohne_template_schlaegt_fehl`.
+
+- [x] **3.4 – Testlücke: Template-Rendering** (`test_unit.py`)
+
+  Neuer Test `TestZoneRendering.test_template_variablen_werden_substituiert`.
