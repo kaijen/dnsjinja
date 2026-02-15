@@ -6,14 +6,18 @@ import hcloud
 from hcloud import Client
 import json
 import os
+import re
 import dns.resolver
 import dns.exception
+import dns.zone
 import click
 import sys
 import jsonschema
 import tempfile
 from .myloadenv import load_env
 from .dnsjinja_config_schema import DNSJINJA_JSON_SCHEMA
+
+_TEMPLATE_NAME_RE = re.compile(r'^[a-zA-Z0-9._-]+$')
 
 
 class UploadError(Exception):
@@ -128,7 +132,7 @@ class DNSJinja:
             lstrip_blocks=True
         )
         self.env.filters['hostname'] = gethostbyname
-        self._serials: dict = {}
+        self._serials: dict[str, str] = {}
         self.zones = self._create_zone_data()
 
     @property
@@ -184,7 +188,11 @@ class DNSJinja:
     def _create_zone_data(self) -> dict:
         zones = {}
         for domain, d in self.config["domains"].items():
-            template = self.env.get_template(d["template"])
+            template_name = d["template"]
+            if not _TEMPLATE_NAME_RE.fullmatch(template_name):
+                print(f'Ungültiger Template-Name: {template_name!r} – nur Buchstaben, Ziffern, . _ - erlaubt.')
+                sys.exit(1)
+            template = self.env.get_template(template_name)
             soa_serial = self._new_zone_serial(domain)
             self._serials[domain] = soa_serial
             zones[domain] = template.render(domain=domain, soa_serial=soa_serial, **d)
@@ -202,7 +210,15 @@ class DNSJinja:
             except OSError as e:
                 print(f'Domäne {domain} konnte nicht geschrieben werden: {str(e)}')
 
+    def _validate_zone_syntax(self, domain: str) -> None:
+        try:
+            dns.zone.from_text(self.zones[domain], origin=domain)
+        except (dns.zone.UnknownOrigin, dns.exception.DNSException, Exception) as e:
+            print(f'Syntaxfehler im Zone-File für {domain}: {e}')
+            sys.exit(1)
+
     def upload_zone(self, domain: str) -> None:
+        self._validate_zone_syntax(domain)
         zone = self._hetzner_zones[domain]
         try:
             self.client.zones.import_zonefile(zone, self.zones[domain])
@@ -239,6 +255,12 @@ class DNSJinja:
         for domain, d in self.config["domains"].items():
             self.backup_zone(domain)
 
+    def dry_run(self) -> None:
+        """Gibt alle gerenderten Zone-Files auf stdout aus, ohne zu schreiben oder hochzuladen."""
+        for domain, content in self.zones.items():
+            print(f'=== {domain} (Serial: {self._serials[domain]}) ===')
+            print(content)
+
 
 @click.command()
 @click.option('-d', '--datadir', default='.', envvar='DNSJINJA_DATADIR', show_default=True, help="Basisverzeichnis für Templates und Konfiguration (DNSJINJA_DATADIR)")
@@ -248,12 +270,17 @@ class DNSJinja:
 @click.option('-w', '--write', is_flag=True, default=False, help="Zone-Files schreiben")
 @click.option('-C', '--create-missing', is_flag=True, default=False, help="Konfigurierte Domains, die bei Hetzner nicht existieren, neu anlegen")
 @click.option('--auth-api-token', default="", envvar='DNSJINJA_AUTH_API_TOKEN', help="API-Token (Bearer) für Hetzner Cloud API (DNSJINJA_AUTH_API_TOKEN)")
-def run(upload, backup, write, datadir, config, auth_api_token, create_missing):
+@click.option('--dry-run', 'dry_run', is_flag=True, default=False, help="Zone-Files rendern und ausgeben, ohne zu schreiben oder hochzuladen")
+def run(upload, backup, write, datadir, config, auth_api_token, create_missing, dry_run):
     """Modulare Verwaltung von DNS-Zonen (Hetzner Cloud API)"""
-    dnsjinja = DNSJinja(upload, backup, write, datadir, config, auth_api_token, create_missing)
-    dnsjinja.backup_zones()
-    dnsjinja.write_zone_files()
-    dnsjinja.upload_zones()
+    if dry_run:
+        dnsjinja = DNSJinja(False, False, False, datadir, config, auth_api_token, create_missing)
+        dnsjinja.dry_run()
+    else:
+        dnsjinja = DNSJinja(upload, backup, write, datadir, config, auth_api_token, create_missing)
+        dnsjinja.backup_zones()
+        dnsjinja.write_zone_files()
+        dnsjinja.upload_zones()
 
 
 def main():

@@ -1,3 +1,4 @@
+import sys
 from .dnsjinja import main
 
 if __name__ == '__main__':

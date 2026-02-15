@@ -384,3 +384,45 @@
   # nachher:
   "$schema": "https://json-schema.org/draft-07/schema",
   ```
+
+---
+
+### Verbesserungsideen
+
+- [x] **1.1 – Validierung der Zone-File-Syntax vor dem Upload** (`dnsjinja.py`)
+
+  Gerenderte Zone-Files mit `dns.zone.from_text()` syntaktisch prüfen, bevor
+  sie an die Hetzner API gesendet werden. Ungültige Zone-Files frühzeitig
+  abfangen statt auf einen API-Fehler zu warten.
+
+- [x] **1.2 – `_serials` korrekt typisieren** (`dnsjinja.py`)
+
+  `self._serials: dict = {}` → `self._serials: dict[str, str] = {}` (Python 3.10+).
+
+- [x] **1.3 – `--dry-run`-Flag** (`dnsjinja.py`)
+
+  Zone-Files rendern und auf stdout ausgeben, ohne zu schreiben oder
+  hochzuladen. Nützlich für CI-Pipelines und manuelle Kontrolle.
+
+- [x] **1.4 – Template-Namen gegen Traversal absichern** (`dnsjinja.py`)
+
+  Template-Namen aus der Config gegen ein Whitelist-Regex prüfen
+  (`^[a-zA-Z0-9._-]+$`), bevor `env.get_template()` aufgerufen wird.
+
+---
+
+### Bugs (Zweites Review)
+
+- [x] **2.1 – `__main__.py` – fehlender `import sys`** (`__main__.py:5`)
+
+  `sys` wird in `__main__.py` verwendet, aber nicht importiert.
+  Jeder Aufruf via `python -m dnsjinja` endet mit `NameError`.
+
+- [x] **2.2 – `explore_hetzner.py` – Token im Klartext sichtbar** (`explore_hetzner.py:13`)
+
+  `input()` → `getpass.getpass()`, damit der Token beim Tippen
+  nicht im Terminal erscheint.
+
+- [x] **2.3 – `explore_hetzner.py` – Breites `except Exception`** (`explore_hetzner.py:25,30`)
+
+  `except Exception` → `except hcloud.APIException` bzw. `except OSError`.

@@ -1,5 +1,7 @@
 import click
+import getpass
 import json
+import hcloud
 from hcloud import Client
 from .myloadenv import load_env
 
@@ -10,7 +12,7 @@ class ExploreHetzner:
 
     def __init__(self, output, auth_api_token="", api_base=""):
         self.out = { 'domains': {} }
-        auth_api_token = auth_api_token or input('Hetzner API-Token (Bearer): ')
+        auth_api_token = auth_api_token or getpass.getpass('Hetzner API-Token (Bearer): ')
         api_base = (api_base or DEFAULT_API_BASE).rstrip('/')
         self.client = Client(token=auth_api_token, api_endpoint=api_base)
         self.output = output
@@ -22,12 +24,12 @@ class ExploreHetzner:
                 self.out['domains'][z.name] = {
                     'template': "",
                 }
-        except Exception as e:
+        except hcloud.APIException as e:
             print(f'Fehler beim Abfragen der Zonen: {e}')
 
         try:
             print(json.dumps(self.out, indent=2), file=self.output)
-        except Exception as e:
+        except OSError as e:
             print(f'Fehler beim Schreiben von {self.output}: {str(e)}')
 
 
