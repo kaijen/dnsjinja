@@ -16,7 +16,7 @@
 
 ### Security
 
-- [ ] **1.1 – Token-Eingabe maskieren** (`dnsjinja.py:190,214`)
+- [x] **1.1 – Token-Eingabe maskieren** (`dnsjinja.py:190,214`)
 
   `input()` durch `getpass.getpass()` ersetzen, damit der Token nicht im
   Terminal erscheint und nicht in der Shell-History landet:
@@ -33,7 +33,7 @@
 
 ---
 
-- [ ] **1.2 – Exit-Code-Datei mit PID eindeutig machen** (`dnsjinja.py:69`, `exit_on_error.py:8`)
+- [x] **1.2 – Exit-Code-Datei mit PID eindeutig machen** (`dnsjinja.py:69`, `exit_on_error.py:8`)
 
   Der feste Dateiname `/tmp/dnsjinja.exit.txt` ermöglicht Konflikte zwischen
   mehreren gleichzeitig laufenden Prozessen. Den Dateinamen mit der PID
@@ -65,7 +65,7 @@
 
 ---
 
-- [ ] **1.3 – Nur HTTPS als API-Endpunkt erlauben** (`dnsjinja_config_schema.py:71`)
+- [x] **1.3 – Nur HTTPS als API-Endpunkt erlauben** (`dnsjinja_config_schema.py:71`)
 
   ```python
   # vorher:

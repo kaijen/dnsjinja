@@ -3,7 +3,9 @@ from socket import gethostbyname
 from pathlib import Path
 from datetime import datetime, timezone
 from hcloud import Client
+import getpass
 import json
+import os
 import dns.resolver
 import click
 import sys
@@ -66,8 +68,12 @@ class DNSJinja:
         self.datadir = DNSJinja._check_dir(datadir, '.', 'Datenverzeichnis')
         self.config_file = DNSJinja._check_dir(config_file, '.', 'Konfigurationsdatei')
 
-        self.exit_status_file = Path(tempfile.gettempdir()) / "dnsjinja.exit.txt"
+        self.exit_status_file = Path(tempfile.gettempdir()) / f"dnsjinja.{os.getpid()}.exit.txt"
         self.exit_status_file.unlink(missing_ok=True)
+        # Pointer-Datei aktualisieren, damit exit_on_error die aktuelle Exit-Code-Datei findet
+        (Path(tempfile.gettempdir()) / "dnsjinja.exit.ptr").write_text(
+            str(self.exit_status_file), encoding='utf-8'
+        )
 
         self.config_schema = DNSJINJA_JSON_SCHEMA
 
@@ -187,7 +193,7 @@ class DNSJinja:
         if not self.upload:
             return
         if not self.auth_api_token:
-            self.auth_api_token = input("Auth-API-Token: ")
+            self.auth_api_token = getpass.getpass("Auth-API-Token: ")
             self.client = Client(token=self.auth_api_token)
         for domain, d in self.config["domains"].items():
             try:
@@ -211,7 +217,7 @@ class DNSJinja:
         if not self.backup:
             return
         if not self.auth_api_token:
-            self.auth_api_token = input("Auth-API-Token: ")
+            self.auth_api_token = getpass.getpass("Auth-API-Token: ")
             self.client = Client(token=self.auth_api_token)
         for domain, d in self.config["domains"].items():
             self.backup_zone(domain)

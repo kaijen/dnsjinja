@@ -68,7 +68,7 @@ DNSJINJA_JSON_SCHEMA = {
                     "$id": "#/properties/global/properties/dns-api-base",
                     "type": "string",
                     "format": "uri",
-                    "pattern": "^https?://",
+                    "pattern": "^https://",
                     "title": "dns-api-base",
                     "description": "Base URL of the Hetzner Cloud API (default: https://api.hetzner.cloud/v1)",
                     "default": "https://api.hetzner.cloud/v1"
