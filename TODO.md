@@ -78,7 +78,7 @@
 
 ### Bugs
 
-- [ ] **2.1 – Variable-Shadowing in Config-Lesefehler-Meldung** (`dnsjinja.py:75,79`)
+- [x] **2.1 – Variable-Shadowing in Config-Lesefehler-Meldung** (`dnsjinja.py:75,79`)
 
   Die `with`-Variable umbenennen, damit `self.config_file` im `except`-Block
   den lesbaren Pfad liefert:
@@ -102,7 +102,7 @@
 
 ---
 
-- [ ] **2.2 – SOA-Serial-Überlauf bei Suffix 99** (`dnsjinja.py:152`)
+- [x] **2.2 – SOA-Serial-Überlauf bei Suffix 99** (`dnsjinja.py:152`)
 
   In der Praxis selten (99 Uploads pro Tag), aber korrekt abfangen.
   Empfehlung: Warnung und Abbruch statt stiller Erzeugung einer
@@ -118,7 +118,7 @@
 
 ---
 
-- [ ] **2.3 – Serial aus `_create_zone_data()` cachen, nicht erneut abfragen** (`dnsjinja.py:161,168`)
+- [x] **2.3 – Serial aus `_create_zone_data()` cachen, nicht erneut abfragen** (`dnsjinja.py:161,168`)
 
   **Hintergrund:** Die alte Hetzner DNS-API (`dns.hetzner.com`) hat den
   SOA-Serial beim Import automatisch hochgezählt. Die neue Cloud-API

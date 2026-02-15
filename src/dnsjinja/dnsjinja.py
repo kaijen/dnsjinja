@@ -78,11 +78,11 @@ class DNSJinja:
         self.config_schema = DNSJINJA_JSON_SCHEMA
 
         try:
-            with open(self.config_file, encoding='utf-8') as config_file:
-                self.config = json.load(config_file)
+            with open(self.config_file, encoding='utf-8') as cfg_fh:
+                self.config = json.load(cfg_fh)
             jsonschema.validate(self.config, self.config_schema)
         except Exception as e:
-            print(f'Konfigurationsdatei {config_file} konnte nicht korrekt gelesen werden: {str(e)}')
+            print(f'Konfigurationsdatei {self.config_file} konnte nicht korrekt gelesen werden: {str(e)}')
             sys.exit(1)
 
         # noinspection PyTypeChecker
@@ -111,6 +111,7 @@ class DNSJinja:
             lstrip_blocks=True
         )
         self.env.filters['hostname'] = gethostbyname
+        self._serials: dict = {}
         self.zones = self._create_zone_data()
 
     @property
@@ -155,7 +156,11 @@ class DNSJinja:
         soa_serial = self._get_zone_serial(domain)
         serial_prefix = soa_serial[:-2]
         if self.today == serial_prefix:
-            serial_suffix = f'{int(soa_serial[-2:])+1:02d}'
+            suffix_int = int(soa_serial[-2:]) + 1
+            if suffix_int > 99:
+                print(f'SOA-Zähler für {domain} hat 99 erreicht – kein weiterer Upload heute möglich.')
+                sys.exit(1)
+            serial_suffix = f'{suffix_int:02d}'
         else:
             serial_suffix = '01'
         return self.today + serial_suffix
@@ -164,14 +169,16 @@ class DNSJinja:
         zones = {}
         for domain, d in self.config["domains"].items():
             template = self.env.get_template(d["template"])
-            zones[domain] = template.render(domain=domain, soa_serial=self._new_zone_serial(domain), **d)
+            soa_serial = self._new_zone_serial(domain)
+            self._serials[domain] = soa_serial
+            zones[domain] = template.render(domain=domain, soa_serial=soa_serial, **d)
         return zones
 
     def write_zone_files(self) -> None:
         if not self.write_zone:
             return
         for domain, d in self.config["domains"].items():
-            zonefile = self.zone_files_dir / Path(d['zone-file'] + f'.{self._new_zone_serial(domain)}')
+            zonefile = self.zone_files_dir / Path(d['zone-file'] + f'.{self._serials[domain]}')
             try:
                 with open(zonefile, 'w', encoding='utf-8') as zf:
                     print(self.zones[domain], file=zf)

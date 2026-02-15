@@ -302,3 +302,46 @@ class TestZoneSerial:
 
         assert len(serial) == 10
         assert serial.isdigit()
+
+    def test_serial_ueberlauf_bei_suffix_99_bricht_ab(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        """Bei Suffix 99 wird sys.exit(1) ausgelöst statt einer 11-stelligen Serial."""
+        dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+
+        # Mock überschreiben: aktueller Zähler endet auf 99
+        soa_99 = MagicMock()
+        soa_99.serial = 2026020199
+        mock_dns_resolver.resolve.return_value = [soa_99]
+
+        dj._today = '20260201'  # gleicher Tag wie Serial-Präfix → Inkrement wird versucht
+
+        with pytest.raises(SystemExit) as exc_info:
+            dj._new_zone_serial('example.com')
+        assert exc_info.value.code == 1
+
+    def test_serial_wird_in_serials_gecacht(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        """_create_zone_data() speichert den berechneten Serial in self._serials."""
+        dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+
+        assert 'example.com' in dj._serials
+        assert len(dj._serials['example.com']) == 10
+
+    def test_write_zone_files_nutzt_gecachten_serial(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        """write_zone_files() verwendet den gecachten Serial – kein zweiter DNS-Aufruf."""
+        dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver, write_zone=True)
+        dns_calls_after_init = mock_dns_resolver.resolve.call_count
+
+        dj.write_zone_files()
+
+        # Kein weiterer DNS-Aufruf durch write_zone_files()
+        assert mock_dns_resolver.resolve.call_count == dns_calls_after_init
+
+        # Dateiname enthält denselben Serial wie der Dateiinhalt
+        files = list((data_dir / 'zone-files').iterdir())
+        serial_in_name = files[0].name.split('.')[-1]
+        assert serial_in_name == dj._serials['example.com']
