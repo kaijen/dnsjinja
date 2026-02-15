@@ -1,6 +1,44 @@
 [build-system]
-requires = ["setuptools>=58", "wheel"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "dnsjinja-kaijen"
+version = "0.3.0"
+authors = [{name = "Kai Jendrian", email = "kai@jendrian.de"}]
+description = "Manage DNS at Hetzner"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "Jinja2>=3.0",
+    "hcloud>=2.0",
+    "dnspython>=2.3",
+    "Click>=8.0",
+    "python-dotenv>=1.0",
+    "pydantic>=2.0",
+    "platformdirs>=4.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.urls]
+Homepage = "https://github.com/kaijen/dnsjinja"
+"Bug Tracker" = "https://github.com/kaijen/dnsjinja/issues"
+
+[project.scripts]
+dnsjinja = "dnsjinja:main"
+explore_hetzner = "dnsjinja:explore_main"
+exit_on_error = "dnsjinja:exit_on_error"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

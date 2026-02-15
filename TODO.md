@@ -484,3 +484,54 @@
 - [x] **3.4 – Testlücke: Template-Rendering** (`test_unit.py`)
 
   Neuer Test `TestZoneRendering.test_template_variablen_werden_substituiert`.
+
+---
+
+### Modernisierungspotenzial (Abschnitt 4 – Improvements.md)
+
+- [x] **M.1 – `appdirs` → `platformdirs`** (`myloadenv.py:1,14`)
+
+  Bereits umgesetzt: `import platformdirs` + `platformdirs.user_config_dir()`.
+
+- [x] **M.2 – `Path().absolute()` → `Path.cwd()`** (`myloadenv.py:16`)
+
+  Bereits umgesetzt: `cwd = Path.cwd()`.
+
+- [x] **M.3 – `setup.cfg` → `pyproject.toml` (PEP 621)** (`setup.cfg`, `pyproject.toml`)
+
+  Alle Metadaten, Dependencies und Entry-Points nach `pyproject.toml` migriert.
+  `setup.cfg` entfernt. `jsonschema` durch `pydantic>=2.0` ersetzt.
+
+- [x] **M.4 – `pathlib`-Methoden statt `open()`** (`exit_on_error.py:21–22`)
+
+  Bereits umgesetzt als Teil von 2.1: `Path.read_text()` statt `with open()`.
+  Zusätzlich in `dnsjinja.py`: `Path.write_text()` in `write_zone_files()`,
+  `upload_zone()` und `backup_zone()`.
+
+- [x] **M.5 – `print()` → `click.echo()`** (`dnsjinja.py`, `explore_hetzner.py`)
+
+  Alle console-`print()`-Aufrufe durch `click.echo()` ersetzt.
+  Fehlermeldungen in `explore_hetzner.py` mit `err=True`.
+
+- [x] **M.6 – `logging`-Modul einrichten** (gesamte Codebasis)
+
+  `import logging` + `logger = logging.getLogger(__name__)` in `dnsjinja.py`.
+  `logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')`
+  in `main()`. Kombination mit `click.echo()` für User-facing Output.
+
+- [x] **M.7 – `jsonschema` → `pydantic` v2** (`dnsjinja_config_schema.py`, `dnsjinja.py`)
+
+  `DNSJINJA_JSON_SCHEMA`-Dict durch Pydantic-Modelle (`DomainConfig`,
+  `GlobalConfig`, `DnsJinjaConfig`) ersetzt. `jsonschema.validate()` durch
+  `_DnsJinjaConfigModel.model_validate()` abgelöst.
+
+- [x] **M.8 – Moderne Type-Annotation-Syntax (Python 3.10+)** (`dnsjinja.py`)
+
+  `self._hetzner_zones: dict[str, Any]`, `self._create_missing: bool`,
+  `_create_zone_data() -> dict[str, str]` annotiert. Kein `Optional`/`Dict`/`List`
+  aus `typing` mehr.
+
+- [x] **M.9 – `TypedDict` für Domain-Konfiguration** (`dnsjinja.py`)
+
+  `DomainConfigEntry(TypedDict, total=False)` mit `template: Required[str]`,
+  `zone_file: str`, `zone_id: str` eingeführt.

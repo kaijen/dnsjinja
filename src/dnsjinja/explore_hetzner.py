@@ -25,12 +25,12 @@ class ExploreHetzner:
                     'template': "",
                 }
         except hcloud.APIException as e:
-            print(f'Fehler beim Abfragen der Zonen: {e}')
+            click.echo(f'Fehler beim Abfragen der Zonen: {e}', err=True)
 
         try:
-            print(json.dumps(self.out, indent=2), file=self.output)
+            click.echo(json.dumps(self.out, indent=2), file=self.output)
         except OSError as e:
-            print(f'Fehler beim Schreiben von {self.output}: {str(e)}')
+            click.echo(f'Fehler beim Schreiben von {self.output}: {str(e)}', err=True)
 
 
 @click.command()

@@ -2,9 +2,11 @@ from jinja2 import Environment, FileSystemLoader
 from socket import gethostbyname
 from pathlib import Path
 from datetime import datetime, timezone
+from typing import Any, Required, TypedDict
 import hcloud
 from hcloud import Client
 import json
+import logging
 import os
 import re
 import dns.resolver
@@ -12,12 +14,21 @@ import dns.exception
 import dns.zone
 import click
 import sys
-import jsonschema
+import pydantic
 import tempfile
 from .myloadenv import load_env
-from .dnsjinja_config_schema import DNSJINJA_JSON_SCHEMA
+from .dnsjinja_config_schema import DnsJinjaConfig as _DnsJinjaConfigModel
+
+logger = logging.getLogger(__name__)
 
 _TEMPLATE_NAME_RE = re.compile(r'^[a-zA-Z0-9._-]+$')
+
+
+class DomainConfigEntry(TypedDict, total=False):
+    """Laufzeit-Struktur eines Domain-Eintrags in self.config['domains']."""
+    template: Required[str]   # aus config.json
+    zone_file: str            # gesetzt von _prepare_zones() als 'zone-file'
+    zone_id: str              # gesetzt von _prepare_zones() als 'zone-id'
 
 
 class UploadError(Exception):
@@ -36,7 +47,7 @@ class DNSJinja:
         valid = p.is_dir() if expect == 'dir' else p.is_file()
         if not valid:
             kind = 'Verzeichnis' if expect == 'dir' else 'Datei'
-            print(f'{typ} {p} existiert nicht oder ist kein(e) {kind}.')
+            click.echo(f'{typ} {p} existiert nicht oder ist kein(e) {kind}.')
             sys.exit(1)
         return p
 
@@ -51,21 +62,21 @@ class DNSJinja:
                     try:
                         response = self.client.zones.create(name=d, mode="primary")
                         hetzner_zones[d] = response.zone
-                        print(f'{d} wurde neu bei Hetzner angelegt')
+                        click.echo(f'{d} wurde neu bei Hetzner angelegt')
                     except hcloud.APIException as e:
-                        print(f'{d} konnte bei Hetzner nicht angelegt werden: {e} - wird ignoriert')
+                        click.echo(f'{d} konnte bei Hetzner nicht angelegt werden: {e} - wird ignoriert')
                         del self.config['domains'][d]
                 else:
-                    print(f'{d} ist konfiguriert aber nicht bei Hetzner eingerichtet - wird ignoriert')
+                    click.echo(f'{d} ist konfiguriert aber nicht bei Hetzner eingerichtet - wird ignoriert')
                     del self.config['domains'][d]
             for d in (hetzner_zones.keys() - config_domains):
-                print(f'{d} ist bei Hetzner eingerichtet aber nicht konfiguriert - bitte prüfen')
+                click.echo(f'{d} ist bei Hetzner eingerichtet aber nicht konfiguriert - bitte prüfen')
             for d in self.config['domains'].keys():
                 self.config['domains'][d]['zone-id'] = hetzner_zones[d].id
                 self.config['domains'][d]['zone-file'] = d + '.zone'
                 self._hetzner_zones[d] = hetzner_zones[d]
         except (hcloud.HCloudException, OSError) as e:
-            print(f'Zonen bei Hetzner konnten nicht ermittelt werden: {e}')
+            click.echo(f'Zonen bei Hetzner konnten nicht ermittelt werden: {e}')
             sys.exit(1)
 
     def __init__(self, upload: bool = False, backup: bool = False,
@@ -82,14 +93,12 @@ class DNSJinja:
             str(self.exit_status_file), encoding='utf-8'
         )
 
-        self.config_schema = DNSJINJA_JSON_SCHEMA
-
         try:
             with open(self.config_file, encoding='utf-8') as cfg_fh:
                 self.config = json.load(cfg_fh)
-            jsonschema.validate(self.config, self.config_schema, cls=jsonschema.Draft7Validator)
-        except (json.JSONDecodeError, jsonschema.ValidationError, OSError) as e:
-            print(f'Konfigurationsdatei {self.config_file} konnte nicht korrekt gelesen werden: {str(e)}')
+            _DnsJinjaConfigModel.model_validate(self.config)
+        except (json.JSONDecodeError, pydantic.ValidationError, OSError) as e:
+            click.echo(f'Konfigurationsdatei {self.config_file} konnte nicht korrekt gelesen werden: {str(e)}')
             sys.exit(1)
 
         # noinspection PyTypeChecker
@@ -101,12 +110,12 @@ class DNSJinja:
 
         self.auth_api_token = auth_api_token
         if not self.auth_api_token:
-            print('Kein API-Token angegeben. Bitte --auth-api-token oder DNSJINJA_AUTH_API_TOKEN setzen.')
+            click.echo('Kein API-Token angegeben. Bitte --auth-api-token oder DNSJINJA_AUTH_API_TOKEN setzen.')
             sys.exit(1)
         self._api_base = self.config['global'].get('dns-api-base', self.DEFAULT_API_BASE).rstrip('/')
         self.client = Client(token=self.auth_api_token, api_endpoint=self._api_base)
-        self._hetzner_zones = {}
-        self._create_missing = create_missing
+        self._hetzner_zones: dict[str, Any] = {}
+        self._create_missing: bool = create_missing
 
         self._prepare_zones()
 
@@ -137,7 +146,7 @@ class DNSJinja:
             return str(r[0].serial)
         except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer,
                 dns.resolver.NoNameservers, dns.exception.DNSException) as e:
-            print(f"Fehler beim Ermitteln des SOA-Zählers: {str(e)}")
+            click.echo(f"Fehler beim Ermitteln des SOA-Zählers: {str(e)}")
             sys.exit(1)
 
     def _new_zone_serial(self, domain: str) -> str:
@@ -146,19 +155,19 @@ class DNSJinja:
         if self.today == serial_prefix:
             suffix_int = int(soa_serial[-2:]) + 1
             if suffix_int > 99:
-                print(f'SOA-Zähler für {domain} hat 99 erreicht – kein weiterer Upload heute möglich.')
+                click.echo(f'SOA-Zähler für {domain} hat 99 erreicht – kein weiterer Upload heute möglich.')
                 sys.exit(1)
             serial_suffix = f'{suffix_int:02d}'
         else:
             serial_suffix = '01'
         return self.today + serial_suffix
 
-    def _create_zone_data(self) -> dict:
-        zones = {}
+    def _create_zone_data(self) -> dict[str, str]:
+        zones: dict[str, str] = {}
         for domain, d in self.config["domains"].items():
             template_name = d["template"]
             if not _TEMPLATE_NAME_RE.fullmatch(template_name):
-                print(f'Ungültiger Template-Name: {template_name!r} – nur Buchstaben, Ziffern, . _ - erlaubt.')
+                click.echo(f'Ungültiger Template-Name: {template_name!r} – nur Buchstaben, Ziffern, . _ - erlaubt.')
                 sys.exit(1)
             template = self.env.get_template(template_name)
             soa_serial = self._new_zone_serial(domain)
@@ -172,17 +181,16 @@ class DNSJinja:
         for domain, d in self.config["domains"].items():
             zonefile = self.zone_files_dir / Path(d['zone-file'] + f'.{self._serials[domain]}')
             try:
-                with open(zonefile, 'w', encoding='utf-8') as zf:
-                    print(self.zones[domain], file=zf)
-                print(f'Domäne {domain} wurde erfolgreich geschrieben')
+                zonefile.write_text(self.zones[domain] + '\n', encoding='utf-8')
+                click.echo(f'Domäne {domain} wurde erfolgreich geschrieben')
             except OSError as e:
-                print(f'Domäne {domain} konnte nicht geschrieben werden: {str(e)}')
+                click.echo(f'Domäne {domain} konnte nicht geschrieben werden: {str(e)}')
 
     def _validate_zone_syntax(self, domain: str) -> None:
         try:
             dns.zone.from_text(self.zones[domain], origin=domain)
         except (dns.zone.UnknownOrigin, dns.exception.DNSException, Exception) as e:
-            print(f'Syntaxfehler im Zone-File für {domain}: {e}')
+            click.echo(f'Syntaxfehler im Zone-File für {domain}: {e}')
             sys.exit(1)
 
     def upload_zone(self, domain: str) -> None:
@@ -190,10 +198,9 @@ class DNSJinja:
         zone = self._hetzner_zones[domain]
         try:
             self.client.zones.import_zonefile(zone, self.zones[domain])
-            print(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
+            click.echo(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
         except hcloud.APIException as e:
-            with open(self.exit_status_file, "w", encoding="utf8") as exit_code_file:
-                exit_code_file.write("254")
+            self.exit_status_file.write_text("254", encoding='utf-8')
             raise UploadError(f'\nDomain: {domain}\nError Message: {e}')
 
     def upload_zones(self) -> None:
@@ -203,7 +210,7 @@ class DNSJinja:
             try:
                 self.upload_zone(domain)
             except UploadError as e:
-                print(f'Domäne {domain} konnte bei Hetzner nicht aktualisiert werden: {str(e)}')
+                click.echo(f'Domäne {domain} konnte bei Hetzner nicht aktualisiert werden: {str(e)}')
                 continue
 
     def backup_zone(self, domain: str) -> None:
@@ -211,11 +218,10 @@ class DNSJinja:
             zone = self._hetzner_zones[domain]
             response = self.client.zones.export_zonefile(zone)
             backupfile = self.zone_backups_dir / Path(self.config['domains'][domain]['zone-file'] + f'.{self._get_zone_serial(domain)}')
-            with open(backupfile, 'w', encoding='utf-8') as zf:
-                print(response.zonefile, file=zf)
-            print(f'Domäne {domain} wurde erfolgreich gesichert')
+            backupfile.write_text(response.zonefile + '\n', encoding='utf-8')
+            click.echo(f'Domäne {domain} wurde erfolgreich gesichert')
         except (hcloud.APIException, OSError) as e:
-            print(f'Domäne {domain} konnte nicht gesichert werden: {str(e)}')
+            click.echo(f'Domäne {domain} konnte nicht gesichert werden: {str(e)}')
 
     def backup_zones(self) -> None:
         if not self.backup:
@@ -226,8 +232,8 @@ class DNSJinja:
     def dry_run(self) -> None:
         """Gibt alle gerenderten Zone-Files auf stdout aus, ohne zu schreiben oder hochzuladen."""
         for domain, content in self.zones.items():
-            print(f'=== {domain} (Serial: {self._serials[domain]}) ===')
-            print(content)
+            click.echo(f'=== {domain} (Serial: {self._serials[domain]}) ===')
+            click.echo(content)
 
 
 @click.command()
@@ -252,6 +258,10 @@ def run(upload, backup, write, datadir, config, auth_api_token, create_missing, 
 
 
 def main():
+    logging.basicConfig(
+        level=logging.WARNING,
+        format='%(levelname)s: %(message)s',
+    )
     load_env()
     run()
 
