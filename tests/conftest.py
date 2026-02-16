@@ -24,7 +24,6 @@ def _load_env():
         for p in search_paths:
             if p.exists():
                 load_dotenv(p, override=False)
-                break
     except ImportError:
         pass
 
@@ -42,6 +41,7 @@ $TTL 3600
 @ IN SOA hydrogen.ns.hetzner.com. dns.hetzner.com. {{ soa_serial }} 86400 10800 3600000 3600
 @ IN NS hydrogen.ns.hetzner.com.
 @ IN NS oxygen.ns.hetzner.com.
+@ IN NS helium.ns.hetzner.de.
 """
 
 
@@ -51,7 +51,8 @@ $TTL 3600
 
 @pytest.fixture(scope="session")
 def api_token():
-    return os.environ.get('DNSJINJA_AUTH_API_TOKEN', '')
+    """DNSJINJA_AUTH_API_TOKEN_TEST hat Vorrang (separates Hetzner-Projekt für Tests)."""
+    return os.environ.get('DNSJINJA_AUTH_API_TOKEN_TEST') or os.environ.get('DNSJINJA_AUTH_API_TOKEN', '')
 
 
 @pytest.fixture(scope="session")
@@ -141,6 +142,7 @@ def mock_client(mock_zone):
         mock_class.return_value = client
         client.zones.get_all.return_value = [mock_zone]
         client.zones.export_zonefile.return_value = export_resp
+        client.zones.get_rrset_all.return_value = []
         yield client
 
 

@@ -134,17 +134,21 @@ class TestUploadZone:
 
         dj.upload_zone('example.com')
 
-        mock_client.zones.import_zonefile.assert_called_once_with(
+        mock_client.zones.get_rrset_all.assert_called_once_with(
             dj._hetzner_zones['example.com'],
-            dj.zones['example.com'],
         )
+        # NS-RRSet wird erstellt (SOA wird übersprungen)
+        mock_client.zones.create_rrset.assert_called_once()
+        create_kwargs = mock_client.zones.create_rrset.call_args
+        assert create_kwargs.kwargs['name'] == '@'
+        assert create_kwargs.kwargs['type'] == 'NS'
         assert 'erfolgreich aktualisiert' in capsys.readouterr().out
 
     def test_upload_fehler_wirft_exception_und_schreibt_exitcode(
         self, data_dir, config_file, mock_client, mock_dns_resolver
     ):
         """Bei Upload-Fehler wird UploadError geworfen und Exit-Code 254 geschrieben."""
-        mock_client.zones.import_zonefile.side_effect = hcloud.APIException(
+        mock_client.zones.get_rrset_all.side_effect = hcloud.APIException(
             code=500, message='Verbindungsfehler', details={}
         )
         dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver, upload=True)
@@ -162,17 +166,22 @@ class TestUploadZone:
         zone_b = MagicMock(); zone_b.name = 'fail.de'; zone_b.id = 'id-fail'
         mock_client.zones.get_all.return_value = [zone_a, zone_b]
 
-        def import_side_effect(zone, zonefile):
+        call_count = 0
+
+        def get_rrset_side_effect(zone, **kwargs):
+            nonlocal call_count
+            call_count += 1
             if zone.name == 'fail.de':
                 raise hcloud.APIException(code=500, message='Fehler', details={})
+            return []
 
-        mock_client.zones.import_zonefile.side_effect = import_side_effect
+        mock_client.zones.get_rrset_all.side_effect = get_rrset_side_effect
         config_path = write_config(data_dir, ['ok.de', 'fail.de'])
         dj = make_dnsjinja(data_dir, config_path, mock_client, mock_dns_resolver, upload=True)
 
         dj.upload_zones()
 
-        assert mock_client.zones.import_zonefile.call_count == 2
+        assert call_count == 2
         assert 'erfolgreich aktualisiert' in capsys.readouterr().out
 
     def test_upload_zones_deaktiviert_tut_nichts(
@@ -183,7 +192,7 @@ class TestUploadZone:
 
         dj.upload_zones()
 
-        mock_client.zones.import_zonefile.assert_not_called()
+        mock_client.zones.get_rrset_all.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

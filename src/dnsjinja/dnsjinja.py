@@ -5,10 +5,13 @@ from datetime import datetime, timezone
 from typing import Any, Required, TypedDict
 import hcloud
 from hcloud import Client
+from hcloud.zones.domain import ZoneRecord
 import json
 import logging
 import os
 import re
+import dns.name
+import dns.rdatatype
 import dns.resolver
 import dns.exception
 import dns.zone
@@ -193,11 +196,77 @@ class DNSJinja:
             click.echo(f'Syntaxfehler im Zone-File für {domain}: {e}')
             sys.exit(1)
 
+    def _parse_zone_rrsets(self, domain: str) -> dict[tuple[str, str], tuple[int, list[str]]]:
+        """Parse gerenderten Zonentext in {(name, rdtype): (ttl, [rdata_values])}.
+
+        SOA-Records werden ausgeschlossen (von Hetzner verwaltet).
+        Hostnamen innerhalb der Zone werden relativ ausgegeben (wie Hetzner
+        sie erwartet), externe FQDNs behalten den abschließenden Punkt.
+        """
+        origin = dns.name.from_text(domain)
+        parsed = dns.zone.from_text(self.zones[domain], origin=origin)
+        result: dict[tuple[str, str], tuple[int, list[str]]] = {}
+        for name, node in parsed.nodes.items():
+            rel_name = '@' if name == dns.name.empty else str(name)
+            for rdataset in node.rdatasets:
+                rdtype = dns.rdatatype.to_text(rdataset.rdtype)
+                if rdtype == 'SOA':
+                    continue
+                ttl = int(rdataset.ttl)
+                records = sorted(
+                    r.to_text(origin=origin, relativize=True) for r in rdataset
+                )
+                result[(rel_name, rdtype)] = (ttl, records)
+        return result
+
+    def _sync_zone_rrsets(self, domain: str) -> None:
+        """Synchronisiert gerenderte Zone-RRSets mit Hetzner über die Record-Level-API."""
+        zone = self._hetzner_zones[domain]
+        desired = self._parse_zone_rrsets(domain)
+
+        current_rrsets = self.client.zones.get_rrset_all(zone)
+        current_map: dict[tuple[str, str], Any] = {}
+        for rrset in current_rrsets:
+            if rrset.type == 'SOA':
+                continue
+            current_map[(rrset.name, rrset.type)] = rrset
+
+        # Create / Update
+        for (name, rdtype), (ttl, records) in desired.items():
+            hetzner_records = [ZoneRecord(value=v) for v in records]
+            key = (name, rdtype)
+
+            if key in current_map:
+                existing = current_map[key]
+                if existing.protection and existing.protection.get('change'):
+                    logger.warning('RRSet %s/%s ist geschützt, wird übersprungen', name, rdtype)
+                    continue
+                existing_values = sorted(r.value for r in (existing.records or []))
+                if existing_values != records or existing.ttl != ttl:
+                    self.client.zones.set_rrset_records(existing, hetzner_records)
+                    if existing.ttl != ttl:
+                        self.client.zones.change_rrset_ttl(existing, ttl)
+            else:
+                self.client.zones.create_rrset(
+                    zone, name=name, type=rdtype, ttl=ttl, records=hetzner_records,
+                )
+
+        # Delete stale RRSets
+        for (name, rdtype), rrset in current_map.items():
+            if (name, rdtype) in desired:
+                continue
+            if rrset.protection and rrset.protection.get('change'):
+                logger.warning('RRSet %s/%s ist geschützt, Löschung übersprungen', name, rdtype)
+                continue
+            try:
+                self.client.zones.delete_rrset(rrset)
+            except hcloud.APIException as e:
+                logger.warning('RRSet %s/%s konnte nicht gelöscht werden: %s', name, rdtype, e)
+
     def upload_zone(self, domain: str) -> None:
         self._validate_zone_syntax(domain)
-        zone = self._hetzner_zones[domain]
         try:
-            self.client.zones.import_zonefile(zone, self.zones[domain])
+            self._sync_zone_rrsets(domain)
             click.echo(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
         except hcloud.APIException as e:
             self.exit_status_file.write_text("254", encoding='utf-8')

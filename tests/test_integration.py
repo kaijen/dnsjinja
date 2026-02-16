@@ -127,6 +127,117 @@ class TestUpload:
         dj.upload_zone(require_test_domain)  # darf keine Exception werfen
 
 
+class TestUploadLebenszyklus:
+    """Vollständiger Lebenszyklus: rudimentär → erweitert → reduziert → rudimentär.
+
+    HINWEIS: Dieser Test überschreibt alle DNS-Records der Testdomain
+    mehrfach. Die Domain sollte ausschließlich für Tests verwendet werden.
+    Am Ende wird die Zone auf den minimalen Datensatz zurückgesetzt.
+    """
+
+    MINIMAL = """\
+$ORIGIN {{ domain }}.
+$TTL 3600
+@ IN SOA hydrogen.ns.hetzner.com. dns.hetzner.com. {{ soa_serial }} 86400 10800 3600000 3600
+@ IN NS hydrogen.ns.hetzner.com.
+@ IN NS oxygen.ns.hetzner.com.
+@ IN NS helium.ns.hetzner.de.
+"""
+
+    ERWEITERT = """\
+$ORIGIN {{ domain }}.
+$TTL 3600
+@ IN SOA hydrogen.ns.hetzner.com. dns.hetzner.com. {{ soa_serial }} 86400 10800 3600000 3600
+@ IN NS hydrogen.ns.hetzner.com.
+@ IN NS oxygen.ns.hetzner.com.
+@ IN NS helium.ns.hetzner.de.
+@ IN A 192.0.2.1
+@ IN MX 10 mail.{{ domain }}.
+@ IN MX 20 mxext3.mailbox.org.
+@ IN TXT "v=spf1 -all"
+mail IN A 192.0.2.2
+www IN A 192.0.2.1
+"""
+
+    REDUZIERT = """\
+$ORIGIN {{ domain }}.
+$TTL 3600
+@ IN SOA hydrogen.ns.hetzner.com. dns.hetzner.com. {{ soa_serial }} 86400 10800 3600000 3600
+@ IN NS hydrogen.ns.hetzner.com.
+@ IN NS oxygen.ns.hetzner.com.
+@ IN NS helium.ns.hetzner.de.
+@ IN A 192.0.2.99
+@ IN TXT "v=spf1 include:_spf.example.com -all"
+"""
+
+    @staticmethod
+    def _get_rrset_map(dj, domain):
+        """Liefert {(name, type): [value, ...]} der aktuellen Zone bei Hetzner."""
+        zone = dj._hetzner_zones[domain]
+        rrsets = dj.client.zones.get_rrset_all(zone)
+        return {
+            (r.name, r.type): sorted(rec.value for rec in (r.records or []))
+            for r in rrsets
+            if r.type != 'SOA'
+        }
+
+    @staticmethod
+    def _upload_with_template(data_dir, template_content, domain, token):
+        """Schreibt ein Template, erstellt eine DNSJinja-Instanz und lädt hoch."""
+        (data_dir / 'templates' / 'test.tpl').write_text(template_content, encoding='utf-8')
+        config_path = write_config(data_dir, [domain])
+        dj = make_dnsjinja(data_dir, config_path, token, upload=True)
+        dj.upload_zone(domain)
+        return dj
+
+    def test_lebenszyklus_records(
+        self, data_dir, require_api_token, require_test_domain,
+    ):
+        """Testet Anlegen, Ändern und Löschen von A-, MX- und TXT-Records."""
+        domain = require_test_domain
+
+        # --- Schritt 1: Minimaler Datensatz (nur NS) --------------------------
+        dj = self._upload_with_template(
+            data_dir, self.MINIMAL, domain, require_api_token,
+        )
+        rrsets = self._get_rrset_map(dj, domain)
+        assert ('@', 'NS') in rrsets
+        assert ('@', 'A') not in rrsets
+        assert ('@', 'MX') not in rrsets
+        assert ('@', 'TXT') not in rrsets
+
+        # --- Schritt 2: Records ergänzen (A, MX, TXT + Subdomains) ------------
+        dj = self._upload_with_template(
+            data_dir, self.ERWEITERT, domain, require_api_token,
+        )
+        rrsets = self._get_rrset_map(dj, domain)
+        assert rrsets[('@', 'A')] == ['192.0.2.1']
+        assert rrsets[('@', 'MX')] == ['10 mail', '20 mxext3.mailbox.org.']
+        assert rrsets[('@', 'TXT')] == ['"v=spf1 -all"']
+        assert rrsets[('mail', 'A')] == ['192.0.2.2']
+        assert rrsets[('www', 'A')] == ['192.0.2.1']
+
+        # --- Schritt 3: Records reduzieren (MX, www, mail entfernt; A+TXT geändert)
+        dj = self._upload_with_template(
+            data_dir, self.REDUZIERT, domain, require_api_token,
+        )
+        rrsets = self._get_rrset_map(dj, domain)
+        assert rrsets[('@', 'A')] == ['192.0.2.99'], "A-Record muss aktualisiert sein"
+        assert rrsets[('@', 'TXT')] == ['"v=spf1 include:_spf.example.com -all"']
+        assert ('@', 'MX') not in rrsets, "MX muss gelöscht sein"
+        assert ('www', 'A') not in rrsets, "www muss gelöscht sein"
+        assert ('mail', 'A') not in rrsets, "mail muss gelöscht sein"
+
+        # --- Schritt 4: Zurücksetzen auf minimalen Datensatz ------------------
+        dj = self._upload_with_template(
+            data_dir, self.MINIMAL, domain, require_api_token,
+        )
+        rrsets = self._get_rrset_map(dj, domain)
+        assert ('@', 'NS') in rrsets
+        assert ('@', 'A') not in rrsets, "A muss am Ende gelöscht sein"
+        assert ('@', 'TXT') not in rrsets, "TXT muss am Ende gelöscht sein"
+
+
 class TestCreateMissing:
 
     def test_bereits_vorhandene_domain_wird_nicht_neu_angelegt(
