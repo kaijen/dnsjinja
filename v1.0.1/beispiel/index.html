@@ -1,0 +1,1007 @@
+
+<!doctype html>
+<html lang="de" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Modulare Verwaltung von DNS-Zonen bei Hetzner mit Jinja2-Templates">
+      
+      
+        <meta name="author" content="Kai Jendrian">
+      
+      
+        <link rel="canonical" href="https://example.com/dnsjinja/v1.0.1/beispiel/">
+      
+      
+        <link rel="prev" href="../templates/">
+      
+      
+        <link rel="next" href="../cli/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Beispiel: Domain zusammensetzen - dnsjinja</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#beispiel-eine-domain-zusammensetzen" class="md-skip">
+          Zum Inhalt
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Kopfzeile">
+    <a href=".." title="dnsjinja" class="md-header__button md-logo" aria-label="dnsjinja" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            dnsjinja
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Beispiel: Domain zusammensetzen
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Zu dunklem Modus wechseln"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Zu dunklem Modus wechseln" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Zu hellem Modus wechseln"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Zu hellem Modus wechseln" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Suche" placeholder="Suche" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Suche">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Zurücksetzen" aria-label="Zurücksetzen" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Suche wird initialisiert
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/kaijen/dnsjinja" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    kaijen/dnsjinja
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="dnsjinja" class="md-nav__button md-logo" aria-label="dnsjinja" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    dnsjinja
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/kaijen/dnsjinja" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    kaijen/dnsjinja
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schnellstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schnellstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../konfiguration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Konfiguration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Template-Architektur
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Beispiel: Domain zusammensetzen
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Beispiel: Domain zusammensetzen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Inhaltsverzeichnis">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Inhaltsverzeichnis
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#der-konfigurationseintrag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Der Konfigurationseintrag
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#die-bausteine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Die Bausteine
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#das-gerenderte-zone-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Das gerenderte Zone-File
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#die-anderen-beiden-beispiel-domains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Die anderen beiden Beispiel-Domains
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#eigene-daten-ableiten" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Eigene Daten ableiten
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI-Referenz
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hetzner-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hetzner Cloud API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../github-actions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Actions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Inhaltsverzeichnis">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Inhaltsverzeichnis
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#der-konfigurationseintrag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Der Konfigurationseintrag
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#die-bausteine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Die Bausteine
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#das-gerenderte-zone-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Das gerenderte Zone-File
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#die-anderen-beiden-beispiel-domains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Die anderen beiden Beispiel-Domains
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#eigene-daten-ableiten" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Eigene Daten ableiten
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="beispiel-eine-domain-zusammensetzen">Beispiel: Eine Domain zusammensetzen<a class="headerlink" href="#beispiel-eine-domain-zusammensetzen" title="Permanent link">&para;</a></h1>
+<p>Dieser Walkthrough zeigt Schritt für Schritt, wie aus einem Konfigurationseintrag und
+den modularen Includes ein vollständiges Zone-File entsteht. Alle Daten sind
+anonymisiert (<code>example.com</code>, RFC-5737-Adressen wie <code>198.51.100.x</code>, <code>2001:db8::/32</code>) und
+stammen aus dem mitgelieferten Datensatz
+<a href="https://github.com/kaijen/dnsjinja/tree/main/samples"><code>samples/</code></a>.</p>
+<h2 id="der-konfigurationseintrag">Der Konfigurationseintrag<a class="headerlink" href="#der-konfigurationseintrag" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">&quot;example.com&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;template&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;standard.tpl&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">&quot;mail&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;example-provider&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">&quot;www&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;example-provider&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">&quot;xmpp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;example-provider&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">&quot;registrar&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Hetzner&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">&quot;subdomains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;blog&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;dev&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">&quot;custom_groups&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;shared-hosting&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">}</span>
+</code></pre></div>
+<p>Aus diesem Eintrag entscheidet <code>dnsjinja</code>, welche Includes eingebunden werden:</p>
+<table>
+<thead>
+<tr>
+<th>Feld</th>
+<th>Wert</th>
+<th>eingebundener Include</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mail</code></td>
+<td><code>example-provider</code></td>
+<td><code>include/mail/mail_example-provider.inc</code></td>
+</tr>
+<tr>
+<td><code>www</code></td>
+<td><code>example-provider</code></td>
+<td><code>include/www/www_example-provider.inc</code></td>
+</tr>
+<tr>
+<td><code>xmpp</code></td>
+<td><code>example-provider</code></td>
+<td><code>include/xmpp/xmpp_example-provider.inc</code></td>
+</tr>
+<tr>
+<td>(Domainname)</td>
+<td><code>example.com</code></td>
+<td><code>include/custom/example.com.inc</code> (automatisch)</td>
+</tr>
+<tr>
+<td><code>custom_groups</code></td>
+<td><code>shared-hosting</code></td>
+<td><code>include/custom-groups/shared-hosting.inc</code></td>
+</tr>
+<tr>
+<td>(aus Mail-Include)</td>
+<td><code>example.com</code></td>
+<td><code>include/validation/example.com.inc</code> (falls vorhanden)</td>
+</tr>
+<tr>
+<td><code>registrar</code></td>
+<td><code>Hetzner</code></td>
+<td>TXT-Record <code>registrar</code></td>
+</tr>
+<tr>
+<td><code>subdomains</code></td>
+<td><code>blog</code>, <code>dev</code></td>
+<td>je ein eigener Zonen-Abschnitt</td>
+</tr>
+</tbody>
+</table>
+<p>SOA und NS kommen aus den Standard-Providern (<code>soa_hetzner</code>, <code>ns_hetzner</code>), da kein
+<code>soa</code>/<code>ns</code>-Override gesetzt ist.</p>
+<h2 id="die-bausteine">Die Bausteine<a class="headerlink" href="#die-bausteine" title="Permanent link">&para;</a></h2>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:6"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><input id="__tabbed_1_5" name="__tabbed_1" type="radio" /><input id="__tabbed_1_6" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">mail_example-provider.inc</label><label for="__tabbed_1_2">www_example-provider.inc</label><label for="__tabbed_1_3">xmpp_example-provider.inc</label><label for="__tabbed_1_4">custom/example.com.inc</label><label for="__tabbed_1_5">custom-groups/shared-hosting.inc</label><label for="__tabbed_1_6">validation/example.com.inc</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>; MX records
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>@               IN      MX      10 mx1.mail.example.
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>@               IN      MX      20 mx2.mail.example.
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>; Mail client auto-configuration
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>autoconfig      IN      CNAME   mail.example.
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>_autodiscover._tcp IN   SRV     0 0 443 mail.example.
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>; SPF
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>@               IN      TXT     &quot;v=spf1 include:mail.example ~all&quot;
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>; DKIM
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>selector1._domainkey  IN  CNAME  selector1._domainkey.mail.example.
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>selector2._domainkey  IN  CNAME  selector2._domainkey.mail.example.
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>; DMARC
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>_dmarc          IN      TXT     &quot;v=DMARC1;p=none;rua=mailto:postmaster@{{domain}}&quot;
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>; bindet validation/&lt;domain&gt;.inc ein, falls vorhanden
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>{% set inc = &#39;include/validation/&#39; + domain + &#39;.inc&#39; %}
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>{% include inc ignore missing +%}
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>; Web server A records
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>@               IN      A       198.51.100.10
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>www             IN      A       198.51.100.10
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>; XMPP/Jabber SRV records
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>_xmpp-client._tcp  3600  IN  SRV  0 5 5222 xmpp.example.
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>_xmpp-server._tcp  3600  IN  SRV  0 5 5269 xmpp.example.
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>; Domain-specific custom records for example.com
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>calendar        IN      CNAME   ghs.example.
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>docs            IN      CNAME   ghs.example.
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>vpn             IN      A       198.51.100.20
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>vpn             IN      AAAA    2001:db8::20
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>; Shared hosting (mehrfach verwendbar)
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>@               3600    IN      A       198.51.100.50
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>*               3600    IN      CNAME   {{domain}}.
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>webmail         3600    IN      CNAME   www
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>; Domain ownership validation (provider-spezifisch)
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>a1b2c3d4e5f6    IN      TXT     &quot;verification=abc123def456&quot;
+</code></pre></div>
+</div>
+</div>
+</div>
+<p><code>{{domain}}</code> wird beim Rendern durch den aktuellen Domainnamen ersetzt – bei der
+Hauptdomain <code>example.com.</code>, bei der Subdomain <code>blog.example.com.</code> usw. So funktioniert
+derselbe Baustein (etwa die <code>*</code>-Wildcard der Shared Group) für Haupt- und Subdomains.</p>
+<h2 id="das-gerenderte-zone-file">Das gerenderte Zone-File<a class="headerlink" href="#das-gerenderte-zone-file" title="Permanent link">&para;</a></h2>
+<p><code>dnsjinja -d samples -c samples/config.json.sample --dry-run</code> erzeugt für die
+Hauptdomain:</p>
+<div class="highlight"><span class="filename">example.com (Hauptdomain)</span><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>$ORIGIN example.com.
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>$TTL 300
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>; SOA record for Hetzner DNS
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>@       IN  SOA hydrogen.ns.hetzner.com. dns.hetzner.com. 2026010101 86400 10800 3600000 3600
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>; Hetzner nameservers
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>@       IN  NS  helium.ns.hetzner.de.
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>@       IN  NS  hydrogen.ns.hetzner.com.
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>@       IN  NS  oxygen.ns.hetzner.com.
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>; MX records
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>@               IN      MX      10 mx1.mail.example.
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>@               IN      MX      20 mx2.mail.example.
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>; Mail client auto-configuration
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>autoconfig      IN      CNAME   mail.example.
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>_autodiscover._tcp IN   SRV     0 0 443 mail.example.
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>; SPF
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>@               IN      TXT     &quot;v=spf1 include:mail.example ~all&quot;
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>; DKIM
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>selector1._domainkey    IN      CNAME   selector1._domainkey.mail.example.
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>selector2._domainkey    IN      CNAME   selector2._domainkey.mail.example.
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>; DMARC
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>_dmarc          IN      TXT     &quot;v=DMARC1;p=none;rua=mailto:postmaster@example.com&quot;
+<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>; Domain ownership validation
+<a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>a1b2c3d4e5f6    IN      TXT     &quot;verification=abc123def456&quot;
+<a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>; XMPP
+<a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>_xmpp-client._tcp      3600    IN      SRV     0 5 5222 xmpp.example.
+<a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>_xmpp-server._tcp      3600    IN      SRV     0 5 5269 xmpp.example.
+<a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>; Web server
+<a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>@               IN      A       198.51.100.10
+<a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>www             IN      A       198.51.100.10
+<a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>; custom/example.com.inc
+<a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a>calendar        IN      CNAME   ghs.example.
+<a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a>docs            IN      CNAME   ghs.example.
+<a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a>vpn             IN      A       198.51.100.20
+<a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a>vpn             IN      AAAA    2001:db8::20
+<a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a>; custom-groups/shared-hosting.inc
+<a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a>@               3600    IN      A       198.51.100.50
+<a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a>*               3600    IN      CNAME   example.com.
+<a id="__codelineno-7-38" name="__codelineno-7-38" href="#__codelineno-7-38"></a>webmail         3600    IN      CNAME   www
+<a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a>registrar IN TXT Hetzner
+</code></pre></div>
+<p>Direkt im Anschluss folgen die Subdomains. Sie durchlaufen dieselben Provider-Includes,
+aber mit angepasstem <code>$ORIGIN</code> – und ohne SOA/NS, da diese nur zur Hauptzone gehören:</p>
+<div class="highlight"><span class="filename">blog.example.com (Subdomain, gekürzt)</span><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>$ORIGIN blog.example.com.
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>$TTL 300
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>@               IN      MX      10 mx1.mail.example.
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>@               IN      MX      20 mx2.mail.example.
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>autoconfig      IN      CNAME   mail.example.
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>...
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>@               3600    IN      A       198.51.100.50
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>*               3600    IN      CNAME   blog.example.com.
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>webmail         3600    IN      CNAME   www
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>registrar IN TXT Hetzner
+</code></pre></div>
+<h2 id="die-anderen-beiden-beispiel-domains">Die anderen beiden Beispiel-Domains<a class="headerlink" href="#die-anderen-beiden-beispiel-domains" title="Permanent link">&para;</a></h2>
+<p><strong><code>example.org</code></strong> (Mail + Web, kein XMPP, keine Subdomains, kein Custom):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>$ORIGIN example.org.
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>$TTL 300
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>@   IN  SOA hydrogen.ns.hetzner.com. dns.hetzner.com. 2026010101 86400 10800 3600000 3600
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>@   IN  NS  helium.ns.hetzner.de.
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>@   IN  NS  hydrogen.ns.hetzner.com.
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>@   IN  NS  oxygen.ns.hetzner.com.
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>@   IN MX 10 mx1.mail.example.
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>@   IN MX 20 mx2.mail.example.
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>autoconfig          IN CNAME mail.example.
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>_autodiscover._tcp  IN SRV   0 0 443 mail.example.
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>@   IN TXT &quot;v=spf1 include:mail.example ~all&quot;
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>selector1._domainkey IN CNAME selector1._domainkey.mail.example.
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>selector2._domainkey IN CNAME selector2._domainkey.mail.example.
+<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>_dmarc IN TXT &quot;v=DMARC1;p=none;rua=mailto:postmaster@example.org&quot;
+<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>@   IN A 198.51.100.10
+<a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>www IN A 198.51.100.10
+<a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>registrar IN TXT Namecheap
+</code></pre></div>
+<p><strong><code>example.net</code></strong> (geparkt – nur SOA, NS und Registrar):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>$ORIGIN example.net.
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>$TTL 300
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>@   IN  SOA hydrogen.ns.hetzner.com. dns.hetzner.com. 2026010101 86400 10800 3600000 3600
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>@   IN  NS  helium.ns.hetzner.de.
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>@   IN  NS  hydrogen.ns.hetzner.com.
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>@   IN  NS  oxygen.ns.hetzner.com.
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>registrar IN TXT GoDaddy
+</code></pre></div>
+<h2 id="eigene-daten-ableiten">Eigene Daten ableiten<a class="headerlink" href="#eigene-daten-ableiten" title="Permanent link">&para;</a></h2>
+<p>Um daraus eine echte Konfiguration zu machen:</p>
+<ol>
+<li><code>samples/</code> kopieren und die Platzhalter-Domains durch eigene ersetzen.</li>
+<li>Pro Mail-/Web-/XMPP-Provider den passenden Include unter <code>include/&lt;kategorie&gt;/</code>
+   anlegen (siehe <a href="../templates/#neuen-provider-hinzufugen">Template-Architektur</a>).</li>
+<li>Domain-spezifische Records in <code>include/custom/&lt;domain&gt;.inc</code>, geteilte in
+   <code>include/custom-groups/&lt;name&gt;.inc</code>.</li>
+<li>Mit <code>--dry-run</code> prüfen, dann mit <code>-b -w -u</code> ausspielen
+   (siehe <a href="../schnellstart/">Schnellstart</a>).</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Zurück zum Seitenanfang
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Kai Jendrian – MIT-Lizenz
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "toc.follow", "content.code.copy", "content.code.annotate", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "In Zwischenablage kopiert", "clipboard.copy": "In Zwischenablage kopieren", "search.result.more.one": "1 weiteres Suchergebnis auf dieser Seite", "search.result.more.other": "# weitere Suchergebnisse auf dieser Seite", "search.result.none": "Keine Suchergebnisse", "search.result.one": "1 Suchergebnis", "search.result.other": "# Suchergebnisse", "search.result.placeholder": "Suchbegriff eingeben", "search.result.term.missing": "Es fehlt", "select.version": "Version ausw\u00e4hlen"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
