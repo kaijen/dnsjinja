@@ -252,3 +252,129 @@ class TestCreateMissing:
         # Die Zone existiert bereits → create() darf nicht aufgerufen worden sein
         # (wir können das nur indirekt prüfen: Domain muss normal befüllt sein)
         assert require_test_domain in dj._hetzner_zones
+
+
+# ---------------------------------------------------------------------------
+# Live-Sync mit den eingecheckten testdata/-Templates
+# ---------------------------------------------------------------------------
+
+class TestTestdataLiveSync:
+    """Lädt mit den synthetischen testdata/-Templates eine vollständige Zone
+    zur Testdomain hoch und verifiziert das Ergebnis über die RRSet-API.
+
+    WARNUNG: Diese Tests überschreiben alle DNS-Records der Testdomain. Die
+    autouse-Fixture `_reset_zone` setzt die Zone am Ende auf den minimalen
+    Datensatz (nur NS) zurück.
+    """
+
+    FULL = {
+        "template": "standard.tpl",
+        "mail": "mailbox.org",
+        "www": "bero",
+        "xmpp": "mailbox",
+        "custom_groups": ["demo-group"],
+        "registrar": "Hetzner",
+    }
+    MINIMAL = {"template": "standard.tpl", "registrar": "Hetzner"}
+
+    @staticmethod
+    def _build(testdata_dir, tmp_path, token, domain, cfg, **kwargs):
+        from tests.conftest import make_testdata_config
+        import json
+        config = make_testdata_config({domain: cfg})
+        cfg_path = tmp_path / 'config.json'
+        cfg_path.write_text(json.dumps(config), encoding='utf-8')
+        return DNSJinja(
+            datadir=str(testdata_dir),
+            config_file=str(cfg_path),
+            auth_api_token=token,
+            **kwargs,
+        )
+
+    @staticmethod
+    def _rrset_map(dj, domain):
+        zone = dj._hetzner_zones[domain]
+        return {
+            (r.name, r.type): sorted(rec.value for rec in (r.records or []))
+            for r in dj.client.zones.get_rrset_all(zone)
+            if r.type != 'SOA'
+        }
+
+    @pytest.fixture(autouse=True)
+    def _reset_zone(self, testdata_dir, tmp_path, require_api_token, require_test_domain):
+        """Nach jedem Test: Zone auf den minimalen Datensatz zurücksetzen."""
+        yield
+        dj = self._build(testdata_dir, tmp_path, require_api_token,
+                         require_test_domain, self.MINIMAL, upload=True)
+        dj.upload_zone(require_test_domain)
+
+    def test_full_feature_sync(
+        self, testdata_dir, tmp_path, require_api_token, require_test_domain
+    ):
+        """Vollständige Feature-Zone wird hochgeladen und ist bei Hetzner sichtbar."""
+        domain = require_test_domain
+        dj = self._build(testdata_dir, tmp_path, require_api_token,
+                         domain, self.FULL, upload=True)
+        dj.upload_zone(domain)
+
+        rr = self._rrset_map(dj, domain)
+        # Mail
+        assert ('@', 'MX') in rr
+        assert any('mx1.mailprovider.example.' in v for v in rr[('@', 'MX')])
+        assert ('autoconfig', 'CNAME') in rr
+        assert ('_dmarc', 'TXT') in rr
+        # Web
+        assert rr[('@', 'A')] == ['192.0.2.10']
+        assert rr[('www', 'A')] == ['192.0.2.10']
+        # XMPP
+        assert ('_xmpp-client._tcp', 'SRV') in rr
+        # custom-group + per-domain custom include
+        assert ('status', 'CNAME') in rr
+        assert ('host1', 'A') in rr
+        # registrar
+        assert ('registrar', 'TXT') in rr
+
+        # TTL aller verwalteten Records (außer dem von Hetzner gepflegten
+        # SOA/NS-Satz) muss 300s betragen.
+        zone = dj._hetzner_zones[domain]
+        ttls = {
+            r.ttl for r in dj.client.zones.get_rrset_all(zone)
+            if r.type not in ('SOA', 'NS')
+        }
+        assert ttls == {300}, f"Unerwartete TTLs bei Hetzner: {ttls}"
+
+    def test_reduzieren_entfernt_konfigurationsgesteuerte_rrsets(
+        self, testdata_dir, tmp_path, require_api_token, require_test_domain
+    ):
+        """FULL → MINIMAL: konfigurationsgesteuerte Records (mail/www/xmpp/
+        custom-groups) werden gelöscht; NS, registrar und der domänen-
+        intrinsische custom/<domain>.inc bleiben erhalten.
+
+        Hinweis: custom/<domain>.inc wird vom Template immer anhand des
+        Domain-Namens eingebunden (ignore missing) – unabhängig von der
+        Config. Für die Testdomain bleiben dessen Records daher bestehen.
+        """
+        domain = require_test_domain
+        # Erst die volle Feature-Zone hochladen ...
+        dj = self._build(testdata_dir, tmp_path, require_api_token,
+                         domain, self.FULL, upload=True)
+        dj.upload_zone(domain)
+        assert ('@', 'MX') in self._rrset_map(dj, domain)
+
+        # ... dann auf den minimalen Config-Datensatz reduzieren.
+        dj = self._build(testdata_dir, tmp_path, require_api_token,
+                         domain, self.MINIMAL, upload=True)
+        dj.upload_zone(domain)
+
+        rr = self._rrset_map(dj, domain)
+        # Konfigurationsgesteuerte Features sind entfernt:
+        assert ('@', 'MX') not in rr, "MX (mail) muss gelöscht sein"
+        assert ('@', 'A') not in rr, "A (www) muss gelöscht sein"
+        assert ('www', 'A') not in rr, "www muss gelöscht sein"
+        assert ('_xmpp-client._tcp', 'SRV') not in rr, "XMPP muss gelöscht sein"
+        assert ('status', 'CNAME') not in rr, "custom-group muss gelöscht sein"
+        assert ('autoconfig', 'CNAME') not in rr, "mail-Records müssen gelöscht sein"
+        # Persistente Records:
+        assert ('@', 'NS') in rr
+        assert ('registrar', 'TXT') in rr
+        assert ('host1', 'A') in rr, "domänen-intrinsischer custom-Record bleibt"

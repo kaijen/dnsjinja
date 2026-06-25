@@ -158,3 +158,87 @@ def mock_dns_resolver():
         soa.serial = 2026020101
         resolver.resolve.return_value = [soa]
         yield resolver
+
+
+# ---------------------------------------------------------------------------
+# testdata/ – eingecheckte Test-Fixture (synthetische Templates)
+# ---------------------------------------------------------------------------
+
+TESTDATA_DIR = Path(__file__).resolve().parent.parent / 'testdata'
+
+
+@pytest.fixture(scope="session")
+def testdata_dir():
+    """Absoluter Pfad zum eingecheckten testdata/-Verzeichnis."""
+    assert TESTDATA_DIR.is_dir(), f"testdata-Verzeichnis fehlt: {TESTDATA_DIR}"
+    return TESTDATA_DIR
+
+
+def make_testdata_config(domains_cfg: dict) -> dict:
+    """config.json-Struktur mit den testdata-Templates und beliebigen Domains."""
+    return {
+        "global": {
+            "zone-files": "zone-files",
+            "zone-backups": "zone-backups",
+            "templates": "templates",
+            "name-servers": ["213.133.100.98", "88.198.229.192", "193.47.99.5"],
+        },
+        "domains": domains_cfg,
+    }
+
+
+class _FakeZones:
+    """Minimaler Ersatz für client.zones (nur was _prepare_zones braucht)."""
+
+    def __init__(self, names):
+        from unittest.mock import MagicMock
+        self._zones = []
+        for n in names:
+            z = MagicMock()
+            z.name = n
+            z.id = f'id-{n}'
+            self._zones.append(z)
+
+    def get_all(self):
+        return list(self._zones)
+
+    def get_rrset_all(self, zone):
+        return []
+
+
+class _FakeClient:
+    def __init__(self, names):
+        self.zones = _FakeZones(names)
+
+
+@pytest.fixture
+def build_dj(testdata_dir, tmp_path, mock_dns_resolver, monkeypatch):
+    """Factory: baut eine DNSJinja-Instanz gegen testdata/-Templates.
+
+    Hetzner-Client und DNS-Resolver sind gemockt; get_all() liefert genau
+    die konfigurierten Domains, damit _prepare_zones sie nicht verwirft.
+    Reines Rendering – es werden keine Zone-Files geschrieben.
+    """
+    from dnsjinja.dnsjinja import DNSJinja
+
+    counter = {'n': 0}
+
+    def _build(domains_cfg: dict, **kwargs):
+        cfg = make_testdata_config(domains_cfg)
+        cfg_path = tmp_path / f'config-{counter["n"]}.json'
+        counter['n'] += 1
+        cfg_path.write_text(json.dumps(cfg), encoding='utf-8')
+
+        fake = _FakeClient(list(domains_cfg.keys()))
+        monkeypatch.setattr(
+            'dnsjinja.dnsjinja.Client',
+            lambda token, api_endpoint: fake,
+        )
+        return DNSJinja(
+            datadir=str(testdata_dir),
+            config_file=str(cfg_path),
+            auth_api_token='test-token',
+            **kwargs,
+        )
+
+    return _build

@@ -151,12 +151,29 @@ explore-hetzner -o config.json
 pip install -e ".[test]"
 ```
 
-### Unit-Tests ausführen
+### Test-Fixture `testdata/`
 
-Die Unit-Tests benötigen keine Netzwerkverbindung – alle Hetzner-API-Aufrufe und DNS-Abfragen sind gemockt:
+Das eingecheckte Verzeichnis `testdata/` ist eine vollständige Daten-Verzeichnis-Struktur
+(`config/`, `templates/`, `zone-files/`, `zone-backups/`) mit **synthetischen** Templates.
+Es ist nach dem realen Aufbau aus `tmp/dns_hetzner/` modelliert, verwendet aber ausschließlich
+Platzhalterwerte (RFC-5737-IPs wie `192.0.2.x`, `2001:db8::/32`, Beispiel-DKIM-/Validation-Tokens)
+und enthält keine echten Secrets. `testdata/config/config.json` deckt mit synthetischen Domains
+alle sinnvollen Konfigurationsfälle ab (Mail-/Web-/XMPP-Provider, `custom`, `custom_groups`,
+`subdomains`, `ns`/`soa`-Override, `registrar`). Die einzige real bei Hetzner existierende Zone
+ist die Live-Testdomain.
+
+> **TTL-Konvention:** Alle von `dnsjinja` verwalteten Records haben einen TTL von **300 s**
+> (`$TTL 300` in `include/00-ttl.inc`, keine Per-Record-Overrides). Offline- und
+> Integrationstests prüfen das explizit.
+
+### Offline-Tests ausführen
+
+Die Offline-Tests benötigen keine Netzwerkverbindung – alle Hetzner-API-Aufrufe und DNS-Abfragen
+sind gemockt. `tests/test_config_cases.py` rendert dabei jede Konfigurationsvariante über die
+echte `DNSJinja`-Klasse gegen die `testdata/`-Templates:
 
 ```bash
-pytest tests/test_unit.py -v
+pytest -m "not integration" -v
 ```
 
 ### Integrationstests ausführen
@@ -165,12 +182,14 @@ Die Integrationstests kommunizieren mit der echten Hetzner Cloud API. Folgende U
 
 | Variable | Beschreibung |
 |----------|-------------|
-| `DNSJINJA_AUTH_API_TOKEN` | Bearer-Token aus der [Hetzner Cloud Console](https://console.hetzner.cloud/) |
+| `DNSJINJA_AUTH_API_TOKEN` | Bearer-Token (Lese-/Schreibrechte) aus der [Hetzner Cloud Console](https://console.hetzner.cloud/) |
 | `DNSJINJA_TEST_DOMAIN` | Testdomain, die bereits als primäre Zone bei Hetzner eingerichtet ist |
 
 Die Variablen können direkt gesetzt oder in `$HOME/.dnsjinja/dnsjinja.env` bzw. einer lokalen `.env`-Datei hinterlegt werden. Sind sie nicht gesetzt, werden die Integrationstests automatisch übersprungen.
 
-> **Hinweis:** Der Upload-Test überschreibt alle DNS-Records der Testdomain mit einem minimalen Zone-File. Die Domain sollte ausschließlich für Tests verwendet werden.
+> **Hinweis:** Die Integrationstests überschreiben alle DNS-Records der Testdomain (Upload mit
+> den `testdata/`-Templates) und setzen sie anschließend auf den minimalen Config-Datensatz
+> zurück. Die Domain sollte ausschließlich für Tests verwendet werden.
 
 ```bash
 export DNSJINJA_AUTH_API_TOKEN=<token>
@@ -179,7 +198,7 @@ export DNSJINJA_TEST_DOMAIN=<testdomain>
 # Nur Integrationstests
 pytest tests/test_integration.py -m integration -v
 
-# Alle Tests
+# Alle Tests (offline + Integration)
 pytest -v
 ```
 

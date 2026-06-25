@@ -1,0 +1,76 @@
+{
+  "global": {
+    "zone-files": "zone-files",
+    "zone-backups": "zone-backups",
+    "templates": "templates",
+    "name-servers": [
+      "213.133.100.98",
+      "88.198.229.192",
+      "193.47.99.5"
+    ]
+  },
+  "domains": {
+    "0x2e6b6169-test.de": {
+      "template": "standard.tpl",
+      "mail": "mailbox.org",
+      "www": "bero",
+      "xmpp": "mailbox",
+      "custom_groups": [
+        "demo-group"
+      ],
+      "registrar": "Hetzner"
+    },
+    "minimal.example": {
+      "template": "standard.tpl",
+      "registrar": "Hetzner"
+    },
+    "mailbox.example": {
+      "template": "standard.tpl",
+      "mail": "mailbox.org",
+      "registrar": "Namecheap"
+    },
+    "antonius.example": {
+      "template": "standard.tpl",
+      "mail": "antonius",
+      "registrar": "Hetzner"
+    },
+    "spamhero.example": {
+      "template": "standard.tpl",
+      "mail": "spamhero",
+      "registrar": "Hetzner"
+    },
+    "webhost.example": {
+      "template": "standard.tpl",
+      "www": "bero",
+      "registrar": "GoDaddy"
+    },
+    "adobe.example": {
+      "template": "standard.tpl",
+      "www": "adobe",
+      "registrar": "Hetzner"
+    },
+    "custom.example": {
+      "template": "standard.tpl",
+      "registrar": "Hetzner"
+    },
+    "subs.example": {
+      "template": "standard.tpl",
+      "mail": "mailbox.org",
+      "subdomains": [
+        "shop",
+        "blog"
+      ],
+      "registrar": "Hetzner"
+    },
+    "combo.example": {
+      "template": "standard.tpl",
+      "mail": "mailbox.org",
+      "www": "beromjh",
+      "xmpp": "mailbox",
+      "custom_groups": [
+        "demo-group"
+      ],
+      "registrar": "Hetzner"
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{"timestamp":"2026-06-25T18:16:39.330691586+02:00","action":"create","task_id":1,"detail":"testdata/ Daten-Verzeichnis mit synthetischen Templates anlegen (Vorbild tmp/dns_hetzner/)"}
+{"timestamp":"2026-06-25T18:16:42.704975535+02:00","action":"create","task_id":2,"detail":"Testdomain 0x2e6b6169-test.de verdrahten (.env + conftest)"}
+{"timestamp":"2026-06-25T18:16:55.241727518+02:00","action":"create","task_id":3,"detail":"Offline-Render-Testsuite fuer alle Konfigurationsfaelle"}
+{"timestamp":"2026-06-25T18:17:01.776989488+02:00","action":"create","task_id":4,"detail":"Live-Integrationstests gegen Testdomain (kuratiert, mit Reset)"}
+{"timestamp":"2026-06-25T18:17:10.990616013+02:00","action":"create","task_id":5,"detail":"Gesamte Test-Suite ausfuehren und gruen machen (Verifikation)"}
+{"timestamp":"2026-06-25T18:17:15.013990979+02:00","action":"create","task_id":6,"detail":"Dokumentation aktualisieren (testdata/, Tests ausfuehren)"}
+{"timestamp":"2026-06-25T18:19:46.195406653+02:00","action":"move","task_id":1,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-06-25T18:24:03.820726464+02:00","action":"edit","task_id":1,"detail":"testdata/ Daten-Verzeichnis mit synthetischen Templates anlegen (Vorbild tmp/dns_hetzner/)"}
+{"timestamp":"2026-06-25T18:24:03.823711695+02:00","action":"release","task_id":1,"detail":"helm-thyme"}
+{"timestamp":"2026-06-25T18:24:09.456146603+02:00","action":"move","task_id":1,"detail":"in-progress -\u003e done"}
+{"timestamp":"2026-06-25T18:24:19.433907908+02:00","action":"move","task_id":2,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-06-25T18:24:27.862416469+02:00","action":"edit","task_id":2,"detail":"Testdomain 0x2e6b6169-test.de verdrahten (.env + conftest)"}
+{"timestamp":"2026-06-25T18:24:27.865680112+02:00","action":"release","task_id":2,"detail":"helm-thyme"}
+{"timestamp":"2026-06-25T18:24:34.606994551+02:00","action":"move","task_id":2,"detail":"in-progress -\u003e done"}
+{"timestamp":"2026-06-25T18:26:14.039644235+02:00","action":"move","task_id":3,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-06-25T18:29:10.844268545+02:00","action":"edit","task_id":3,"detail":"Offline-Render-Testsuite fuer alle Konfigurationsfaelle"}
+{"timestamp":"2026-06-25T18:29:10.844728662+02:00","action":"release","task_id":3,"detail":"helm-thyme"}
+{"timestamp":"2026-06-25T18:29:22.176155477+02:00","action":"move","task_id":3,"detail":"in-progress -\u003e done"}
+{"timestamp":"2026-06-25T18:29:32.693733006+02:00","action":"move","task_id":4,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-06-25T18:38:33.922781116+02:00","action":"edit","task_id":4,"detail":"Live-Integrationstests gegen Testdomain (kuratiert, mit Reset)"}
+{"timestamp":"2026-06-25T18:38:33.923823536+02:00","action":"release","task_id":4,"detail":"helm-thyme"}
+{"timestamp":"2026-06-25T18:38:40.139380895+02:00","action":"move","task_id":4,"detail":"in-progress -\u003e done"}
+{"timestamp":"2026-06-25T18:38:47.609205422+02:00","action":"edit","task_id":5,"detail":"Gesamte Test-Suite ausfuehren und gruen machen (Verifikation)"}
+{"timestamp":"2026-06-25T18:38:47.609622306+02:00","action":"claim","task_id":5,"detail":"helm-thyme"}
+{"timestamp":"2026-06-25T18:38:58.009559603+02:00","action":"move","task_id":5,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-06-25T18:44:13.752575057+02:00","action":"edit","task_id":5,"detail":"Gesamte Test-Suite ausfuehren und gruen machen (Verifikation)"}
+{"timestamp":"2026-06-25T18:44:13.752940656+02:00","action":"release","task_id":5,"detail":"helm-thyme"}
+{"timestamp":"2026-06-25T18:44:20.703465366+02:00","action":"move","task_id":5,"detail":"in-progress -\u003e done"}
+{"timestamp":"2026-06-25T18:44:25.023058438+02:00","action":"move","task_id":6,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-06-25T18:44:29.867903907+02:00","action":"edit","task_id":6,"detail":"Dokumentation aktualisieren (testdata/, Tests ausfuehren)"}
+{"timestamp":"2026-06-25T18:44:29.868224955+02:00","action":"release","task_id":6,"detail":"helm-thyme"}
+{"timestamp":"2026-06-25T18:44:33.641932011+02:00","action":"move","task_id":6,"detail":"in-progress -\u003e done"}
+{"timestamp":"2026-06-25T18:46:02.838030839+02:00","action":"create","task_id":7,"detail":"Dynamische Versionierung: Umstellung auf hatchling + hatch-vcs"}
+{"timestamp":"2026-06-25T18:46:17.478883948+02:00","action":"move","task_id":7,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-06-25T18:49:52.17385591+02:00","action":"edit","task_id":7,"detail":"Dynamische Versionierung: Umstellung auf hatchling + hatch-vcs"}
+{"timestamp":"2026-06-25T18:49:52.174121276+02:00","action":"release","task_id":7,"detail":"helm-thyme"}
+{"timestamp":"2026-06-25T18:49:55.496238397+02:00","action":"move","task_id":7,"detail":"in-progress -\u003e done"}

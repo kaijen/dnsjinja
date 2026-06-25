@@ -1,6 +1,10 @@
 # Project-specific
 config.json
+# Ausnahme: eingecheckte Test-Fixture (synthetische Daten, keine Secrets)
+!testdata/config/config.json
 _tmp_*
+tmp/
+workspace/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
