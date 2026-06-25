@@ -1,0 +1,86 @@
+site_name: dnsjinja
+site_description: Modulare Verwaltung von DNS-Zonen bei Hetzner mit Jinja2-Templates
+site_author: Kai Jendrian
+
+# site_url an den eigenen Webserver anpassen. mike legt die Doku in
+# versionierte Unterpfade (z. B. /v1.0.1/ und /latest/). Der site_url
+# beeinflusst kanonische Links und die sitemap.xml.
+site_url: https://example.com/dnsjinja/
+
+repo_url: https://github.com/kaijen/dnsjinja
+repo_name: kaijen/dnsjinja
+copyright: Kai Jendrian – MIT-Lizenz
+
+theme:
+  name: material
+  language: de
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Zu dunklem Modus wechseln
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Zu hellem Modus wechseln
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+
+# Versionsumschalter (oben rechts) über mike. "latest" ist die
+# Standardversion, auf die die Wurzel weiterleitet.
+extra:
+  version:
+    provider: mike
+    default: latest
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+plugins:
+  - search:
+      lang: de
+
+nav:
+  - Start: index.md
+  - Installation: installation.md
+  - Schnellstart: schnellstart.md
+  - Konfiguration: konfiguration.md
+  - Template-Architektur: templates.md
+  - "Beispiel: Domain zusammensetzen": beispiel.md
+  - CLI-Referenz: cli.md
+  - Hetzner Cloud API: hetzner-api.md
+  - GitHub Actions: github-actions.md

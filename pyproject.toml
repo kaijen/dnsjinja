@@ -27,6 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest"]
+docs = ["mkdocs-material>=9.5", "mike>=2.1"]
 
 [project.urls]
 Homepage = "https://github.com/kaijen/dnsjinja"

@@ -459,8 +459,20 @@ Verwendete hcloud-Methoden:
 | Operation | hcloud-Methode | Beschreibung |
 |-----------|----------------|--------------|
 | Zonen auflisten | `client.zones.get_all()` | Alle Zonen abrufen |
-| Zone-File importieren | `client.zones.import_zonefile(zone, zonefile)` | Upload |
-| Zone-File exportieren | `client.zones.export_zonefile(zone)` | Backup |
+| Zone neu anlegen | `client.zones.create(name, mode="primary")` | `--create-missing` |
+| Zone exportieren | `client.zones.export_zonefile(zone)` | Backup (`-b`) |
+| RRSets lesen | `client.zones.get_rrset_all(zone)` | Soll-/Ist-Abgleich beim Upload |
+| RRSet anlegen/ändern | `client.zones.create_rrset(...)` / `set_rrset_records(...)` | Upload (`-u`) |
+| RRSet löschen | `client.zones.delete_rrset(rrset)` | Upload (`-u`), veraltete Records |
+| TTL ändern | `client.zones.change_rrset_ttl(...)` | Upload (`-u`) |
+| Zone importieren | `client.zones.import_zonefile(zone, zonefile)` | Restore aus Backup |
+
+Der **Upload** (`-u`) arbeitet auf Record-Ebene (*RRSet-Sync*): Das gerenderte Zone-File wird
+mit [dnspython](https://www.dnspython.org/) validiert, anschließend werden fehlende RRSets
+angelegt, geänderte aktualisiert und **Records, die nicht mehr im Template stehen, gelöscht**.
+Der SOA-Record (von Hetzner verwaltet) und als *protected* markierte RRSets werden dabei
+übersprungen. `import_zonefile` wird nicht für den Upload, sondern für ein vollständiges
+Restore aus einem Backup verwendet.
 
 Der API-Token wird über die Hetzner Cloud Console erstellt (nicht der alte Auth-API-Token von dns.hetzner.com).
 
@@ -479,3 +491,4 @@ Benötigte GitHub Secrets und Variables:
 - `GH_PAT_DNSJINJA` (Secret) - GitHub PAT für Installation von dnsjinja aus privatem Repository
 - `DNSJINJA` (Variable) - Repository-Pfad des dnsjinja-Tools
 - `DNSDATA` (Variable) - Repository-Pfad der DNS-Daten
+- `DNSJINJA_VER` (Variable) - zu installierender Tag (z.B. `v1.0.1`); die Installation wird mit `@${{ vars.DNSJINJA_VER }}` auf diese Version gepinnt

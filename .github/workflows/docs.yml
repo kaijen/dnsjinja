@@ -1,0 +1,50 @@
+name: Publish Docs
+
+# Baut die MkDocs-Dokumentation und veröffentlicht sie mit mike versioniert in
+# den Branch gh-pages. Trigger: Push eines Release-Tags (v*) oder manuell.
+#
+# Hinweis: GitHub Pages muss NICHT aktiviert sein – der gh-pages-Branch enthält
+# eine fertige statische Site, die auf einem eigenen Webserver ausgeliefert wird.
+# site_url in mkdocs.yml ggf. an die tatsächliche URL anpassen.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version/Alias (z. B. v1.0.1)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  deploy-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install docs dependencies
+        run: pip install ".[docs]"
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Deploy with mike
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          git fetch origin gh-pages --depth=1 || true
+          mike deploy --push --update-aliases "$VERSION" latest
+          mike set-default --push latest

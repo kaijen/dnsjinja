@@ -1,0 +1,61 @@
+# Hetzner Cloud API
+
+`dnsjinja` kommuniziert ausschließlich über die offizielle Python-Bibliothek
+[hcloud-python](https://github.com/hetznercloud/hcloud-python) mit der
+[Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions).
+HTTP-Aufrufe, Authentifizierung und Paginierung übernimmt die Bibliothek.
+
+## Token erstellen
+
+Das Bearer-Token wird in der [Hetzner Cloud Console](https://console.hetzner.cloud/)
+erstellt: **Projekt → Security → API Tokens → Generate API Token** mit
+**Read & Write**.
+
+!!! danger "Kein alter DNS-Token"
+    Es muss ein **Cloud-API-Token** sein. Die früheren `Auth-API-Token` aus der
+    DNS-Konsole (`dns.hetzner.com`) funktionieren mit der Cloud API **nicht** und
+    führen zu Authentifizierungsfehlern.
+
+Das Token wird über `--auth-api-token`, die Umgebungsvariable
+`DNSJINJA_AUTH_API_TOKEN` oder eine `.env`-Datei bereitgestellt. Ist es nicht gesetzt,
+fragt `dnsjinja` es bei Bedarf interaktiv ab.
+
+## Basis-URL überschreiben
+
+Standardmäßig spricht `dnsjinja` `https://api.hetzner.cloud/v1` an. Die Basis-URL lässt
+sich überschreiben:
+
+- in der `config.json` über `global.dns-api-base`
+- für `explore_hetzner` über `--api-base` bzw. `DNSJINJA_API_BASE`
+
+## Verwendete Operationen
+
+| Operation | hcloud-Methode | Verwendet für |
+|-----------|----------------|---------------|
+| Zonen auflisten | `client.zones.get_all()` | Abgleich Config ↔ Hetzner, Zonen-IDs |
+| Zone neu anlegen | `client.zones.create(name, mode="primary")` | `--create-missing` |
+| Zone exportieren | `client.zones.export_zonefile(zone)` | Backup (`-b`) |
+| RRSets lesen | `client.zones.get_rrset_all(zone)` | Soll-/Ist-Abgleich beim Upload |
+| RRSet anlegen/ändern | `client.zones.create_rrset(...)` / `set_rrset_records(...)` | Upload (`-u`) |
+| RRSet löschen | `client.zones.delete_rrset(rrset)` | Upload (`-u`), veraltete Records |
+| TTL ändern | `client.zones.change_rrset_ttl(...)` | Upload (`-u`) |
+| Zone importieren | `client.zones.import_zonefile(zone, zonefile)` | Restore aus Backup |
+
+## So funktioniert der Upload (RRSet-Sync)
+
+Der Upload arbeitet auf Record-Ebene und macht die Hetzner-Zone deckungsgleich mit dem
+gerenderten Template:
+
+1. **Rendern & validieren** – das Zone-File wird gerendert und mit dnspython auf
+   Syntax geprüft. Fehler brechen den Lauf für diese Domain ab.
+2. **Soll-Ist-Abgleich** – gerenderte RRSets werden mit den vorhandenen verglichen.
+3. **Anlegen / Aktualisieren** – neue RRSets werden erstellt, geänderte aktualisiert.
+4. **Löschen** – RRSets, die nicht (mehr) im Template stehen, werden entfernt.
+
+Ausgenommen sind der SOA-Record (von Hetzner verwaltet) sowie als *protected*
+markierte RRSets, die übersprungen werden.
+
+!!! tip "Restore aus dem Backup"
+    Jeder Lauf mit `-b` legt vor Änderungen ein Zonefile in `zone-backups/` ab. Im
+    Notfall lässt sich eine Zone daraus mit `client.zones.import_zonefile(zone,
+    zonefile)` vollständig wiederherstellen (ersetzt alle RRSets der Zone).

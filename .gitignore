@@ -4,6 +4,9 @@ config.json
 !testdata/config/config.json
 _tmp_*
 tmp/
+
+# MkDocs build output (mike publiziert nach gh-pages)
+site/
 workspace/
 
 # Byte-compiled / optimized / DLL files
