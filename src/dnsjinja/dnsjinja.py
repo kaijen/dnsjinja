@@ -200,8 +200,10 @@ class DNSJinja:
         """Parse gerenderten Zonentext in {(name, rdtype): (ttl, [rdata_values])}.
 
         SOA-Records werden ausgeschlossen (von Hetzner verwaltet).
-        Hostnamen innerhalb der Zone werden relativ ausgegeben (wie Hetzner
-        sie erwartet), externe FQDNs behalten den abschließenden Punkt.
+        Owner-Namen werden relativ ausgegeben (inkl. '@' für den Apex, wie
+        Hetzner sie erwartet). RDATA-Ziele werden als FQDN ausgegeben, damit
+        ein CNAME-Ziel auf den Zonen-Apex nicht zu '@' kollabiert (Hetzner
+        lehnt '@' als CNAME-Wert mit invalid_input ab).
         """
         origin = dns.name.from_text(domain)
         parsed = dns.zone.from_text(self.zones[domain], origin=origin)
@@ -214,7 +216,7 @@ class DNSJinja:
                     continue
                 ttl = int(rdataset.ttl)
                 records = sorted(
-                    r.to_text(origin=origin, relativize=True) for r in rdataset
+                    r.to_text(origin=origin, relativize=False) for r in rdataset
                 )
                 result[(rel_name, rdtype)] = (ttl, records)
         return result

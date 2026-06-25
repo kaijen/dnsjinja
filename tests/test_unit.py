@@ -436,3 +436,60 @@ class TestZoneRendering:
         zone = dj.zones['example.com']
         assert '$ORIGIN example.com.' in zone
         assert dj._serials['example.com'] in zone
+
+
+# ---------------------------------------------------------------------------
+# _parse_zone_rrsets() – RDATA-Serialisierung (Bug #8)
+# ---------------------------------------------------------------------------
+
+class TestParseZoneRRSets:
+    """Apex-CNAME-Ziele dürfen nicht zu '@' kollabieren (Hetzner lehnt das ab)."""
+
+    APEX_CNAME_ZONE = (
+        "$ORIGIN example.com.\n"
+        "$TTL 3600\n"
+        "@ IN SOA hydrogen.ns.hetzner.com. dns.hetzner.com. 2026020101 86400 10800 3600000 3600\n"
+        "@ IN NS hydrogen.ns.hetzner.com.\n"
+        "kai IN CNAME example.com.\n"
+        "join IN CNAME verify\n"
+        "www IN CNAME external.example.org.\n"
+    )
+
+    def _parse(self, data_dir, config_file, mock_client, mock_dns_resolver):
+        dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+        dj.zones['example.com'] = self.APEX_CNAME_ZONE
+        return dj._parse_zone_rrsets('example.com')
+
+    def test_apex_cname_ziel_wird_als_fqdn_ausgegeben(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        """CNAME aufs Apex -> FQDN 'example.com.', NICHT '@'."""
+        result = self._parse(data_dir, config_file, mock_client, mock_dns_resolver)
+        ttl, records = result[('kai', 'CNAME')]
+        assert records == ['example.com.']
+
+    def test_within_zone_ziel_wird_als_fqdn_ausgegeben(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        """Relatives Within-Zone-Ziel -> 'verify.example.com.', nicht 'verify'."""
+        result = self._parse(data_dir, config_file, mock_client, mock_dns_resolver)
+        _, records = result[('join', 'CNAME')]
+        assert records == ['verify.example.com.']
+
+    def test_externes_ziel_bleibt_unveraendert(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        """Externe FQDN-Ziele bleiben identisch (keine Regression)."""
+        result = self._parse(data_dir, config_file, mock_client, mock_dns_resolver)
+        _, records = result[('www', 'CNAME')]
+        assert records == ['external.example.org.']
+
+    def test_owner_namen_bleiben_relativ_inkl_apex(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        """Owner-Namen bleiben relativ; der Apex-Owner bleibt '@'."""
+        result = self._parse(data_dir, config_file, mock_client, mock_dns_resolver)
+        owners = {name for (name, rdtype) in result}
+        assert '@' in owners
+        assert 'kai' in owners
+        assert ('SOA' not in {rdtype for (_, rdtype) in result})

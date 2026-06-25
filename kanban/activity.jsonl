@@ -35,3 +35,10 @@
 {"timestamp":"2026-06-25T18:49:52.17385591+02:00","action":"edit","task_id":7,"detail":"Dynamische Versionierung: Umstellung auf hatchling + hatch-vcs"}
 {"timestamp":"2026-06-25T18:49:52.174121276+02:00","action":"release","task_id":7,"detail":"helm-thyme"}
 {"timestamp":"2026-06-25T18:49:55.496238397+02:00","action":"move","task_id":7,"detail":"in-progress -\u003e done"}
+{"timestamp":"2026-06-25T20:41:35.879583972+02:00","action":"create","task_id":8,"detail":"Bug: CNAME-Apex-Ziel wird als \"@\" gesendet und von Hetzner abgelehnt"}
+{"timestamp":"2026-06-25T20:43:12.448116612+02:00","action":"edit","task_id":8,"detail":"Bug: CNAME-Apex-Ziel wird als \"@\" gesendet und von Hetzner abgelehnt"}
+{"timestamp":"2026-06-25T20:43:12.449388298+02:00","action":"claim","task_id":8,"detail":"eagle-heron"}
+{"timestamp":"2026-06-25T20:43:14.724036841+02:00","action":"move","task_id":8,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-06-25T20:47:24.253217104+02:00","action":"edit","task_id":8,"detail":"Bug: CNAME-Apex-Ziel wird als \"@\" gesendet und von Hetzner abgelehnt"}
+{"timestamp":"2026-06-25T20:47:24.260005511+02:00","action":"release","task_id":8,"detail":"eagle-heron"}
+{"timestamp":"2026-06-25T20:47:27.010688679+02:00","action":"move","task_id":8,"detail":"in-progress -\u003e done"}

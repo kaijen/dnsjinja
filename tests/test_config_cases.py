@@ -164,8 +164,8 @@ class TestCustom:
         dj = build_dj({"custom.example": dom()})
         rr = rrsets(dj, "custom.example")
         assert rr[("@", "A")][1] == ["203.0.113.50"]
-        # interner CNAME wird relativ ausgegeben
-        assert rr[("intra", "CNAME")][1] == ["www"]
+        # interner CNAME wird als FQDN ausgegeben (siehe Bug #8: Apex-Schutz)
+        assert rr[("intra", "CNAME")][1] == ["www.custom.example."]
 
     def test_custom_fehlt_wird_ignoriert(self, build_dj):
         """Domain ohne custom/<domain>.inc rendert ohne Fehler."""
@@ -175,8 +175,8 @@ class TestCustom:
     def test_custom_groups(self, build_dj):
         dj = build_dj({"g.example": dom(www="bero", custom_groups=["demo-group"])})
         rr = rrsets(dj, "g.example")
-        assert rr[("status", "CNAME")][1] == ["www"]
-        assert rr[("webmail", "CNAME")][1] == ["www"]
+        assert rr[("status", "CNAME")][1] == ["www.g.example."]
+        assert rr[("webmail", "CNAME")][1] == ["www.g.example."]
 
     def test_unbekannte_custom_group_wird_ignoriert(self, build_dj):
         dj = build_dj({"g.example": dom(custom_groups=["gibtsnicht"])})

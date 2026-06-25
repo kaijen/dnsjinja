@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- CNAME targets pointing at the zone apex are now serialized as a FQDN
+  (e.g. `example.com.`) instead of collapsing to `@`, which Hetzner rejected
+  as an invalid CNAME value (`invalid_input`). Within-zone targets are
+  likewise emitted as FQDNs; owner names stay relative (incl. `@`).
+
 ## [1.0.0] - 2026-06-25
 
 ### Breaking Changes
