@@ -7,11 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-06-25
+
 ### Fixed
 - CNAME targets pointing at the zone apex are now serialized as a FQDN
   (e.g. `example.com.`) instead of collapsing to `@`, which Hetzner rejected
   as an invalid CNAME value (`invalid_input`). Within-zone targets are
-  likewise emitted as FQDNs; owner names stay relative (incl. `@`).
+  likewise emitted as FQDNs; owner names stay relative (incl. `@`). (#8)
 
 ## [1.0.0] - 2026-06-25
 
@@ -40,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.env` cascade order, SOA serial overflow handling and several robustness
   issues found in code review.
 
-[Unreleased]: https://github.com/kaijen/dnsjinja/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/kaijen/dnsjinja/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/kaijen/dnsjinja/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/kaijen/dnsjinja/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/kaijen/dnsjinja/releases/tag/v0.2.0
