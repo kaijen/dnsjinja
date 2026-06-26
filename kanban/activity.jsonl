@@ -43,3 +43,4 @@
 {"timestamp":"2026-06-25T20:47:24.260005511+02:00","action":"release","task_id":8,"detail":"eagle-heron"}
 {"timestamp":"2026-06-25T20:47:27.010688679+02:00","action":"move","task_id":8,"detail":"in-progress -\u003e done"}
 {"timestamp":"2026-06-26T11:00:00+02:00","action":"create","task_id":9,"detail":"Provider-Abstraktion: DNS-API hinter Plugin-Schnittstelle entkoppeln"}
+{"timestamp":"2026-06-26T11:30:00+02:00","action":"create","task_id":10,"detail":"Multiprovider: Domains gleichzeitig über verschiedene DNS-Provider verwalten"}
