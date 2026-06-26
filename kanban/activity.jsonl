@@ -42,3 +42,9 @@
 {"timestamp":"2026-06-25T20:47:24.253217104+02:00","action":"edit","task_id":8,"detail":"Bug: CNAME-Apex-Ziel wird als \"@\" gesendet und von Hetzner abgelehnt"}
 {"timestamp":"2026-06-25T20:47:24.260005511+02:00","action":"release","task_id":8,"detail":"eagle-heron"}
 {"timestamp":"2026-06-25T20:47:27.010688679+02:00","action":"move","task_id":8,"detail":"in-progress -\u003e done"}
+{"timestamp":"2026-06-26T11:00:00+02:00","action":"create","task_id":9,"detail":"Provider-Abstraktion: DNS-API hinter Plugin-Schnittstelle entkoppeln"}
+{"timestamp":"2026-06-26T11:30:00+02:00","action":"create","task_id":10,"detail":"Multiprovider: Domains gleichzeitig über verschiedene DNS-Provider verwalten"}
+{"timestamp":"2026-06-26T12:00:00+02:00","action":"create","task_id":11,"detail":"DNSSEC-Support + schrittweise DNS-Migration zu DNSSEC-fähigem Provider"}
+{"timestamp":"2026-06-26T12:30:00+02:00","action":"create","task_id":12,"detail":"deSEC-Provider-Plugin implementieren (DNSSEC-fähiges DNS-Hosting)"}
+{"timestamp":"2026-06-26T13:30:00+02:00","action":"move","task_id":9,"detail":"backlog -> done"}
+{"timestamp":"2026-06-26T13:30:00+02:00","action":"move","task_id":10,"detail":"backlog -> done"}
