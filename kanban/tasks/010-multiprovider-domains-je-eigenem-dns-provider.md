@@ -38,12 +38,16 @@ Registry aus #9 steht.
 
 ## Motivation
 
-- Realität ist heterogen: Die `testdata/config/config.json` führt bereits
-  pro Domain ein `registrar`-Feld (Hetzner, Namecheap, GoDaddy …). Heute ist
-  das nur Metadaten – technisch landet trotzdem **alles** bei dem einen
-  Hetzner-Client. Multiprovider macht diese Realität abbildbar.
-- Migrationen (Domain wandert von Provider X zu Y) und gemischte Bestände
-  ohne mehrere getrennte Configs/Läufe/Tokens handhaben.
+- **Wichtig – `registrar` ≠ DNS-Provider:** Das `registrar`-Feld in
+  `testdata/config/config.json` (Hetzner, Namecheap, GoDaddy …) bezeichnet,
+  **wo die Domain registriert/bezahlt** wird, NICHT wo das DNS gehostet wird.
+  Beides ist orthogonal (Domain bei Namecheap registriert, DNS bei Hetzner).
+  Aktuell liegt das **DNS aller Domains bei Hetzner**; `registrar` ist davon
+  unabhängig. Multiprovider trennt genau diese Achse: das DNS-Hosting wird
+  pro Domain wählbar, unabhängig vom Registrar.
+- Konkreter Anlass (siehe #11): schrittweise DNS-Migration von Hetzner zu
+  einem DNSSEC-fähigen DNS-Provider – Domain für Domain, ohne mehrere
+  getrennte Configs/Läufe/Tokens.
 
 ## Designänderungen gegenüber dem Einzel-Provider-Modell
 
@@ -153,9 +157,11 @@ Neuer benannter Provider-Block plus per-Domain-Zuordnung:
 
 - Ohne `global.providers`/`domains.*.provider` identisches Verhalten wie nach
   #9 (ein Hetzner-Default, `--auth-api-token`).
-- `registrar`-Feld bleibt reine Metadaten; `provider` ist das technische,
-  funktionale Feld. (Optional später: `registrar` als Default-Hinweis für
-  `provider` nutzbar – nicht Teil dieses Tickets.)
+- `registrar` (Bezahl-/Registrierungsstelle) und `provider` (DNS-Hosting)
+  sind orthogonal und werden NICHT verknüpft. `registrar` bleibt reine
+  Metadaten; `provider` ist das technische, funktionale Feld für das
+  DNS-Routing. `registrar` taugt ausdrücklich NICHT als Default für
+  `provider`.
 
 ## Risiken / offene Punkte
 
