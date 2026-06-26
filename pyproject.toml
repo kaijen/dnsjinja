@@ -28,6 +28,12 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest"]
 docs = ["mkdocs-material>=9.5", "mike>=2.1"]
+# Hetzner-Plugin-Abhängigkeit. hcloud bleibt vorerst auch in [dependencies],
+# damit Default-Installationen den Hetzner-Provider weiterhin mitbringen.
+providers-hetzner = ["hcloud>=2.0"]
+
+[project.entry-points."dnsjinja.providers"]
+hetzner = "dnsjinja.providers.hetzner:HetznerProvider"
 
 [project.urls]
 Homepage = "https://github.com/kaijen/dnsjinja"

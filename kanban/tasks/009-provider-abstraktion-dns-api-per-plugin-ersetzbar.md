@@ -1,10 +1,12 @@
 ---
 id: 9
 title: 'Provider-Abstraktion: DNS-API hinter Plugin-Schnittstelle entkoppeln'
-status: backlog
+status: done
 priority: high
 created: 2026-06-26T11:00:00+02:00
-updated: 2026-06-26T11:00:00+02:00
+updated: 2026-06-26T13:30:00+02:00
+started: 2026-06-26T13:00:00+02:00
+completed: 2026-06-26T13:30:00+02:00
 tags:
     - refactoring
     - architecture
@@ -218,3 +220,12 @@ Kern bleibt importierbar ohne `hcloud`.
       (Hetzner) unverändert.
 - [ ] Doku beschreibt das Plugin-/Provider-Modell und das Schreiben eines
       eigenen Providers.
+
+[[2026-06-26]] Fri 13:30
+Umgesetzt: providers/{base,registry,hetzner,pool}.py. DnsProvider-ABC + Zone/
+RRSet + ProviderError-Hierarchie; Registry mit Import-Pfad/Entry-Point/Builtin;
+HetznerProvider kapselt hcloud (Kern importiert kein hcloud mehr). Kern
+(dnsjinja.py) nutzt self._provider_for/self._zones. Entry-Point in pyproject
+registriert, providers-hetzner-Extra. Kern-Tests laufen über FakeProvider;
+neuer test_registry.py + test_hetzner_provider.py. Gesamte Suite grün
+(92 passed, 11 integration skipped).

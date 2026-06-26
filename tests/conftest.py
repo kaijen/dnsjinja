@@ -116,34 +116,122 @@ def config_file(data_dir):
 
 
 # ---------------------------------------------------------------------------
-# Mock-Fixtures für Unit-Tests
+# FakeProvider – provider-neutraler In-Memory-Ersatz (Tickets #9/#10)
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
-def mock_zone():
-    """Gemocktes BoundZone-Objekt für example.com."""
-    from unittest.mock import MagicMock
-    zone = MagicMock()
-    zone.name = 'example.com'
-    zone.id = 'test-zone-id-123'
-    return zone
+from dnsjinja.providers.base import DnsProvider, ProviderError, RRSet, Zone
+
+
+class FakeProvider(DnsProvider):
+    """In-Memory-`DnsProvider` für Offline-Tests ohne hcloud.
+
+    Zeichnet alle mutierenden Aufrufe in `self.calls` auf und erlaubt das
+    gezielte Auslösen von `ProviderError` pro Methode (`fail`) oder pro Zone
+    (`fail_zones`).
+    """
+
+    name = "fake"
+
+    def __init__(self, *, token=None, api_base=None, options=None,
+                 zones=None, rrsets=None, export_text=None,
+                 supports_export=True, fail=None, fail_zones=None):
+        self.token = token
+        self.api_base = api_base
+        self.options = options or {}
+        self._zones = {n: Zone(name=n, id=f'id-{n}', handle=object()) for n in (zones or [])}
+        self._rrsets = {k: list(v) for k, v in (rrsets or {}).items()}
+        self._export_text = export_text if export_text is not None else '$ORIGIN example.com.\n$TTL 3600\n'
+        self._supports_export = supports_export
+        self.fail = dict(fail or {})
+        self.fail_zones = set(fail_zones or [])
+        self.calls = []
+
+    def _maybe_fail(self, method, zone_name=None):
+        if method in self.fail:
+            raise self.fail[method]
+        if zone_name is not None and zone_name in self.fail_zones:
+            raise ProviderError(f"Fake-Fehler für Zone {zone_name}")
+
+    def list_zones(self):
+        self._maybe_fail('list_zones')
+        self.calls.append(('list_zones',))
+        return dict(self._zones)
+
+    def create_zone(self, name):
+        self._maybe_fail('create_zone')
+        z = Zone(name=name, id=f'id-{name}', handle=object())
+        self._zones[name] = z
+        self.calls.append(('create_zone', name))
+        return z
+
+    def get_rrsets(self, zone):
+        self._maybe_fail('get_rrsets', zone.name)
+        self.calls.append(('get_rrsets', zone.name))
+        return list(self._rrsets.get(zone.name, []))
+
+    def create_rrset(self, zone, name, type, ttl, records):
+        self._maybe_fail('create_rrset')
+        self.calls.append(('create_rrset', zone.name, name, type, ttl, list(records)))
+
+    def set_rrset_records(self, zone, rrset, records):
+        self._maybe_fail('set_rrset_records')
+        self.calls.append(('set_rrset_records', zone.name, rrset.name, rrset.type, list(records)))
+
+    def set_rrset_ttl(self, zone, rrset, ttl):
+        self._maybe_fail('set_rrset_ttl')
+        self.calls.append(('set_rrset_ttl', zone.name, rrset.name, rrset.type, ttl))
+
+    def delete_rrset(self, zone, rrset):
+        self._maybe_fail('delete_rrset')
+        self.calls.append(('delete_rrset', zone.name, rrset.name, rrset.type))
+
+    def supports_zonefile_export(self):
+        return self._supports_export
+
+    def export_zonefile(self, zone):
+        self._maybe_fail('export_zonefile', zone.name)
+        self.calls.append(('export_zonefile', zone.name))
+        return self._export_text
+
+    # -- Test-Hilfen -------------------------------------------------------
+
+    def calls_of(self, method):
+        return [c for c in self.calls if c[0] == method]
+
+
+def install_provider_loader(monkeypatch, provider_or_factory):
+    """Patcht die Registry so, dass `load_provider` den/die Fake liefert.
+
+    `provider_or_factory` ist entweder eine einzelne `DnsProvider`-Instanz
+    (für Single-Provider-Tests) oder eine Funktion ``plugin -> DnsProvider``
+    (für Multiprovider-Tests).
+    """
+    if callable(provider_or_factory) and not isinstance(provider_or_factory, DnsProvider):
+        def _loader(plugin, *, token, api_base=None, options=None):
+            return provider_or_factory(plugin)
+    else:
+        def _loader(plugin, *, token, api_base=None, options=None):
+            return provider_or_factory
+    monkeypatch.setattr('dnsjinja.providers.registry.load_provider', _loader)
 
 
 @pytest.fixture
-def mock_client(mock_zone):
-    """Vollständig gemockter hcloud.Client."""
-    from unittest.mock import MagicMock, patch
+def make_dj(data_dir, mock_dns_resolver, monkeypatch):
+    """Factory: DNSJinja mit injiziertem FakeProvider (oder Provider-Factory)."""
+    from dnsjinja.dnsjinja import DNSJinja
 
-    export_resp = MagicMock()
-    export_resp.zonefile = '$ORIGIN example.com.\n$TTL 3600\n'
+    def _make(config_path, provider=None, **kwargs):
+        if provider is None:
+            provider = FakeProvider(zones=['example.com'])
+        install_provider_loader(monkeypatch, provider)
+        return DNSJinja(
+            datadir=str(data_dir),
+            config_file=str(config_path),
+            auth_api_token='test-token-unit',
+            **kwargs,
+        )
 
-    with patch('dnsjinja.dnsjinja.Client') as mock_class:
-        client = MagicMock()
-        mock_class.return_value = client
-        client.zones.get_all.return_value = [mock_zone]
-        client.zones.export_zonefile.return_value = export_resp
-        client.zones.get_rrset_all.return_value = []
-        yield client
+    return _make
 
 
 @pytest.fixture
@@ -187,37 +275,14 @@ def make_testdata_config(domains_cfg: dict) -> dict:
     }
 
 
-class _FakeZones:
-    """Minimaler Ersatz für client.zones (nur was _prepare_zones braucht)."""
-
-    def __init__(self, names):
-        from unittest.mock import MagicMock
-        self._zones = []
-        for n in names:
-            z = MagicMock()
-            z.name = n
-            z.id = f'id-{n}'
-            self._zones.append(z)
-
-    def get_all(self):
-        return list(self._zones)
-
-    def get_rrset_all(self, zone):
-        return []
-
-
-class _FakeClient:
-    def __init__(self, names):
-        self.zones = _FakeZones(names)
-
-
 @pytest.fixture
 def build_dj(testdata_dir, tmp_path, mock_dns_resolver, monkeypatch):
     """Factory: baut eine DNSJinja-Instanz gegen testdata/-Templates.
 
-    Hetzner-Client und DNS-Resolver sind gemockt; get_all() liefert genau
-    die konfigurierten Domains, damit _prepare_zones sie nicht verwirft.
-    Reines Rendering – es werden keine Zone-Files geschrieben.
+    Der DNS-Provider ist ein In-Memory-`FakeProvider`, dessen `list_zones()`
+    genau die konfigurierten Domains liefert, damit _prepare_zones sie nicht
+    verwirft. Der DNS-Resolver ist gemockt. Reines Rendering – es werden keine
+    Zone-Files geschrieben.
     """
     from dnsjinja.dnsjinja import DNSJinja
 
@@ -229,11 +294,8 @@ def build_dj(testdata_dir, tmp_path, mock_dns_resolver, monkeypatch):
         counter['n'] += 1
         cfg_path.write_text(json.dumps(cfg), encoding='utf-8')
 
-        fake = _FakeClient(list(domains_cfg.keys()))
-        monkeypatch.setattr(
-            'dnsjinja.dnsjinja.Client',
-            lambda token, api_endpoint: fake,
-        )
+        provider = FakeProvider(zones=list(domains_cfg.keys()))
+        install_provider_loader(monkeypatch, provider)
         return DNSJinja(
             datadir=str(testdata_dir),
             config_file=str(cfg_path),

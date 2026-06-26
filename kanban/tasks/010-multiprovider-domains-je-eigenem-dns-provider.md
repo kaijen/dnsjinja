@@ -1,10 +1,12 @@
 ---
 id: 10
 title: 'Multiprovider: Domains gleichzeitig über verschiedene DNS-Provider verwalten'
-status: backlog
+status: done
 priority: high
 created: 2026-06-26T11:30:00+02:00
-updated: 2026-06-26T11:30:00+02:00
+updated: 2026-06-26T13:30:00+02:00
+started: 2026-06-26T13:00:00+02:00
+completed: 2026-06-26T13:30:00+02:00
 depends_on:
     - 9
 tags:
@@ -185,3 +187,14 @@ Neuer benannter Provider-Block plus per-Domain-Zuordnung:
       aggregiert Teilfehler korrekt.
 - [ ] Bestehende Single-Provider-Configs laufen unverändert.
 - [ ] Doku beschreibt Multiprovider-Config + Credential-Modell mit Beispiel.
+
+[[2026-06-26]] Fri 13:30
+Umgesetzt: ProviderPool (providers/pool.py) mit lazy, gecachten Instanzen pro
+benanntem Provider (token-env oder --auth-api-token). Config-Schema:
+global.providers / default-provider / domains.*.provider + Querverweis-
+Validierung. _prepare_zones gruppiert pro Provider (list_zones je Provider
+genau einmal), Warnungen provider-lokal, Fehler-Isolierung (ein Provider-
+Ausfall verwirft nur dessen Domains). upload/backup/sync routen über
+self._provider_for[domain]. Tests: tests/test_multiprovider.py (Routing,
+Gruppierung, Isolierung, zwei Accounts gleiches Plugin, Ref-Validierung).
+Rückwärtskompatibel: ohne global.providers impliziter Single-Provider.
