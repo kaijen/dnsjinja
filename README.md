@@ -301,7 +301,52 @@ Der Abschnitt `global` definiert die Infrastruktur-Einstellungen:
 | `zone-backups` | ja | Verzeichnis für Zone-Backups |
 | `templates` | ja | Verzeichnis für Jinja2-Templates |
 | `name-servers` | ja | Liste der Nameserver-IPs für SOA-Abfragen |
-| `dns-api-base` | nein | Basis-URL der Hetzner Cloud API (Standard: `https://api.hetzner.cloud/v1`) |
+| `dns-api-base` | nein | Basis-URL der Provider-API im Single-Provider-Modus (Standard: `https://api.hetzner.cloud/v1`) |
+| `provider` | nein | Plugin-Kennung im Single-Provider-Modus (Standard: `hetzner`) |
+| `providers` | nein | Multiprovider: benannte Provider-Definitionen (siehe unten) |
+| `default-provider` | nein | Multiprovider: Provider für Domains ohne eigenes `provider`-Feld |
+
+#### Provider-Plugins & Multiprovider
+
+Die konkrete DNS-Provider-API ist hinter einer Plugin-Schnittstelle
+abstrahiert (`dnsjinja.providers`). Ohne weitere Angaben läuft alles wie
+bisher über den eingebauten **Hetzner**-Provider.
+
+Für den Betrieb mehrerer Provider in einer Konfiguration wird `global.providers`
+gesetzt und jede Domain optional über ein `provider`-Feld geroutet:
+
+```json
+{
+  "global": {
+    "...": "...",
+    "providers": {
+      "hetzner-main": {
+        "plugin": "hetzner",
+        "api-base": "https://api.hetzner.cloud/v1",
+        "token-env": "DNSJINJA_TOKEN_HETZNER_MAIN"
+      },
+      "desec": { "plugin": "desec", "token-env": "DNSJINJA_TOKEN_DESEC" }
+    },
+    "default-provider": "hetzner-main"
+  },
+  "domains": {
+    "example.com": { "template": "standard.tpl", "provider": "desec" },
+    "example.org": { "template": "standard.tpl" }
+  }
+}
+```
+
+- `plugin` ist die Plugin-Kennung (Entry-Point `dnsjinja.providers` oder ein
+  expliziter Import-Pfad `paket.modul:Klasse`).
+- `token-env` benennt die Umgebungsvariable mit dem API-Token des Providers.
+  Ohne `token-env` wird `--auth-api-token` / `DNSJINJA_AUTH_API_TOKEN`
+  verwendet (Single-Provider-Fall).
+- Domains ohne `provider`-Feld nutzen `default-provider`.
+- Fällt ein Provider aus, werden nur dessen Domains übersprungen; die übrigen
+  Provider laufen weiter.
+
+> Hinweis: Das `registrar`-Feld (siehe unten) bezeichnet die Registrierungs-/
+> Bezahlstelle der Domain und ist **unabhängig** vom DNS-`provider`.
 
 ### Abschnitt `domains`
 
@@ -310,6 +355,7 @@ Jeder Eintrag im Abschnitt `domains` definiert eine zu verwaltende Domain. Der S
 | Feld | Pflicht | Typ | Beschreibung |
 |------|---------|-----|-------------|
 | `template` | ja | String | Jinja2-Template-Dateiname (z.B. `standard.tpl`) |
+| `provider` | nein | String | DNS-Provider-Name aus `global.providers` (Multiprovider) |
 | `mail` | nein | String | Mail-Provider (wählt `include/mail/mail_<wert>.inc`) |
 | `www` | nein | String | Web-Provider (wählt `include/www/www_<wert>.inc`) |
 | `xmpp` | nein | String | XMPP-Provider (wählt `include/xmpp/xmpp_<wert>.inc`) |
@@ -317,7 +363,7 @@ Jeder Eintrag im Abschnitt `domains` definiert eine zu verwaltende Domain. Der S
 | `subdomains` | nein | Array | Liste der Subdomains, die als eigene Zonen verarbeitet werden |
 | `custom_groups` | nein | Array | Liste gemeinsamer Konfigurationsgruppen |
 
-Die Felder `zone-id` und `zone-file` werden automatisch durch Abgleich mit der Hetzner Cloud API befüllt.
+Die Felder `zone-id` und `zone-file` werden automatisch durch Abgleich mit der jeweiligen Provider-API befüllt.
 
 Alle konfigurierten Felder werden als Jinja2-Variablen an die Templates übergeben.
 

@@ -3,9 +3,6 @@ from socket import gethostbyname
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Required, TypedDict
-import hcloud
-from hcloud import Client
-from hcloud.zones.domain import ZoneRecord
 import json
 import logging
 import os
@@ -21,6 +18,7 @@ import pydantic
 import tempfile
 from .myloadenv import load_env
 from .dnsjinja_config_schema import DnsJinjaConfig as _DnsJinjaConfigModel
+from .providers import DnsProvider, ProviderError, ProviderPool, Zone
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +28,7 @@ _TEMPLATE_NAME_RE = re.compile(r'^[a-zA-Z0-9._-]+$')
 class DomainConfigEntry(TypedDict, total=False):
     """Laufzeit-Struktur eines Domain-Eintrags in self.config['domains']."""
     template: Required[str]   # aus config.json
+    provider: str             # optionaler Provider-Name (Multiprovider, #10)
     zone_file: str            # gesetzt von _prepare_zones() als 'zone-file'
     zone_id: str              # gesetzt von _prepare_zones() als 'zone-id'
 
@@ -40,7 +39,9 @@ class UploadError(Exception):
 
 class DNSJinja:
 
-    DEFAULT_API_BASE = "https://api.hetzner.cloud/v1"
+    #: Record-Typen, die nicht über den RRSet-Sync verwaltet werden
+    #: (SOA wird vom Provider gepflegt). DNSSEC-Typen kommen mit #11 hinzu.
+    SYNC_EXCLUDE_TYPES = frozenset({'SOA'})
 
     @staticmethod
     def _check_path(path: str, basedir: str, typ: str, expect: str = 'dir') -> Path:
@@ -54,33 +55,88 @@ class DNSJinja:
             sys.exit(1)
         return p
 
-    def _prepare_zones(self) -> None:
-        try:
-            all_zones = self.client.zones.get_all()
+    def _build_provider_pool(self) -> str:
+        """Provider-Definitionen aus der Config ableiten und Pool aufbauen.
 
-            hetzner_zones = {z.name: z for z in all_zones}
-            config_domains = set(self.config['domains'].keys())
-            for d in sorted(config_domains - hetzner_zones.keys()):
+        Liefert den Namen des Default-Providers zurück. Unterstützt zwei
+        Modi:
+
+        * **Multiprovider (#10):** ``global.providers`` (Name -> Definition)
+          plus optional ``global.default-provider``; pro Domain ein optionales
+          ``provider``-Feld.
+        * **Single-Provider/Legacy (#9):** ohne ``global.providers`` wird ein
+          impliziter Provider ``"default"`` aus ``global.provider`` (Default
+          ``hetzner``), ``global.dns-api-base`` und ``--auth-api-token``
+          gebildet – Verhalten wie bisher.
+        """
+        gcfg = self.config['global']
+        providers_cfg = gcfg.get('providers')
+
+        if providers_cfg:
+            definitions: dict[str, dict] = {name: dict(defn) for name, defn in providers_cfg.items()}
+            default_provider = gcfg.get('default-provider')
+            if not default_provider and len(definitions) == 1:
+                default_provider = next(iter(definitions))
+            # Bei mehreren Providern ohne Default ist per Schema garantiert, dass
+            # jede Domain ein explizites provider-Feld hat (default bleibt None).
+        else:
+            if not self.auth_api_token:
+                click.echo('Kein API-Token angegeben. Bitte --auth-api-token oder DNSJINJA_AUTH_API_TOKEN setzen.')
+                sys.exit(1)
+            defn = {'plugin': gcfg.get('provider', 'hetzner')}
+            api_base = gcfg.get('dns-api-base')
+            if api_base:
+                defn['api-base'] = api_base
+            definitions = {'default': defn}
+            default_provider = 'default'
+
+        self.providers = ProviderPool(definitions, default_token=self.auth_api_token)
+        return default_provider
+
+    def _prepare_zones(self) -> None:
+        """Domains nach Provider gruppieren und je Provider einmal abgleichen.
+
+        Pro Provider werden die Zonen genau einmal ermittelt; die
+        ``konfiguriert/eingerichtet``-Hinweise sind dadurch provider-lokal
+        korrekt. Fällt ein Provider aus, werden nur dessen Domains ignoriert –
+        die übrigen Provider laufen weiter (Fehler-Isolierung, #10).
+        """
+        by_provider: dict[str, list[str]] = {}
+        for d in self.config['domains']:
+            by_provider.setdefault(self._provider_name_for[d], []).append(d)
+
+        for pname, domains in by_provider.items():
+            try:
+                provider = self.providers.get(pname)
+                zones = provider.list_zones()
+            except ProviderError as e:
+                click.echo(f"Provider {pname!r} nicht verfügbar: {e} – betroffene Domains werden ignoriert")
+                for d in domains:
+                    del self.config['domains'][d]
+                continue
+
+            configured = set(domains)
+            for d in sorted(configured - zones.keys()):
                 if self._create_missing:
                     try:
-                        response = self.client.zones.create(name=d, mode="primary")
-                        hetzner_zones[d] = response.zone
-                        click.echo(f'{d} wurde neu bei Hetzner angelegt')
-                    except hcloud.APIException as e:
-                        click.echo(f'{d} konnte bei Hetzner nicht angelegt werden: {e} - wird ignoriert')
+                        zones[d] = provider.create_zone(d)
+                        click.echo(f'{d} wurde neu bei {pname} angelegt')
+                    except ProviderError as e:
+                        click.echo(f'{d} konnte bei {pname} nicht angelegt werden: {e} - wird ignoriert')
                         del self.config['domains'][d]
                 else:
-                    click.echo(f'{d} ist konfiguriert aber nicht bei Hetzner eingerichtet - wird ignoriert')
+                    click.echo(f'{d} ist konfiguriert aber nicht bei {pname} eingerichtet - wird ignoriert')
                     del self.config['domains'][d]
-            for d in (hetzner_zones.keys() - config_domains):
-                click.echo(f'{d} ist bei Hetzner eingerichtet aber nicht konfiguriert - bitte prüfen')
-            for d in self.config['domains'].keys():
-                self.config['domains'][d]['zone-id'] = hetzner_zones[d].id
+            for d in (zones.keys() - configured):
+                click.echo(f'{d} ist bei {pname} eingerichtet aber nicht konfiguriert - bitte prüfen')
+            for d in sorted(configured):
+                if d not in self.config['domains']:
+                    continue  # oben verworfen
+                zone = zones[d]
+                self.config['domains'][d]['zone-id'] = zone.id
                 self.config['domains'][d]['zone-file'] = d + '.zone'
-                self._hetzner_zones[d] = hetzner_zones[d]
-        except (hcloud.HCloudException, OSError) as e:
-            click.echo(f'Zonen bei Hetzner konnten nicht ermittelt werden: {e}')
-            sys.exit(1)
+                self._zones[d] = zone
+                self._provider_for[d] = provider
 
     def __init__(self, upload: bool = False, backup: bool = False,
                  write_zone: bool = False, datadir: str = "",
@@ -112,13 +168,16 @@ class DNSJinja:
         self.zone_backups_dir = DNSJinja._check_path(self.config['global']['zone-backups'], self.datadir, 'Zone-Backup-Verzeichnis', expect='dir')
 
         self.auth_api_token = auth_api_token
-        if not self.auth_api_token:
-            click.echo('Kein API-Token angegeben. Bitte --auth-api-token oder DNSJINJA_AUTH_API_TOKEN setzen.')
-            sys.exit(1)
-        self._api_base = self.config['global'].get('dns-api-base', self.DEFAULT_API_BASE).rstrip('/')
-        self.client = Client(token=self.auth_api_token, api_endpoint=self._api_base)
-        self._hetzner_zones: dict[str, Any] = {}
         self._create_missing: bool = create_missing
+
+        # Provider-Pool aufbauen und jede Domain ihrem Provider-Namen zuordnen.
+        default_provider = self._build_provider_pool()
+        self._provider_name_for: dict[str, str] = {
+            d: (dcfg.get('provider') or default_provider)
+            for d, dcfg in self.config['domains'].items()
+        }
+        self._zones: dict[str, Zone] = {}
+        self._provider_for: dict[str, DnsProvider] = {}
 
         self._prepare_zones()
 
@@ -199,11 +258,10 @@ class DNSJinja:
     def _parse_zone_rrsets(self, domain: str) -> dict[tuple[str, str], tuple[int, list[str]]]:
         """Parse gerenderten Zonentext in {(name, rdtype): (ttl, [rdata_values])}.
 
-        SOA-Records werden ausgeschlossen (von Hetzner verwaltet).
-        Owner-Namen werden relativ ausgegeben (inkl. '@' für den Apex, wie
-        Hetzner sie erwartet). RDATA-Ziele werden als FQDN ausgegeben, damit
-        ein CNAME-Ziel auf den Zonen-Apex nicht zu '@' kollabiert (Hetzner
-        lehnt '@' als CNAME-Wert mit invalid_input ab).
+        SOA-Records werden ausgeschlossen (vom Provider verwaltet).
+        Owner-Namen werden relativ ausgegeben (inkl. '@' für den Apex). RDATA-
+        Ziele werden als FQDN ausgegeben, damit ein CNAME-Ziel auf den Zonen-
+        Apex nicht zu '@' kollabiert (siehe Bug #8).
         """
         origin = dns.name.from_text(domain)
         parsed = dns.zone.from_text(self.zones[domain], origin=origin)
@@ -212,7 +270,7 @@ class DNSJinja:
             rel_name = '@' if name == dns.name.empty else str(name)
             for rdataset in node.rdatasets:
                 rdtype = dns.rdatatype.to_text(rdataset.rdtype)
-                if rdtype == 'SOA':
+                if rdtype in self.SYNC_EXCLUDE_TYPES:
                     continue
                 ttl = int(rdataset.ttl)
                 records = sorted(
@@ -222,55 +280,52 @@ class DNSJinja:
         return result
 
     def _sync_zone_rrsets(self, domain: str) -> None:
-        """Synchronisiert gerenderte Zone-RRSets mit Hetzner über die Record-Level-API."""
-        zone = self._hetzner_zones[domain]
+        """Synchronisiert gerenderte Zone-RRSets über die Record-Level-API des
+        zuständigen Providers."""
+        provider = self._provider_for[domain]
+        zone = self._zones[domain]
         desired = self._parse_zone_rrsets(domain)
 
-        current_rrsets = self.client.zones.get_rrset_all(zone)
         current_map: dict[tuple[str, str], Any] = {}
-        for rrset in current_rrsets:
-            if rrset.type == 'SOA':
+        for rrset in provider.get_rrsets(zone):
+            if rrset.type in self.SYNC_EXCLUDE_TYPES:
                 continue
             current_map[(rrset.name, rrset.type)] = rrset
 
         # Create / Update
         for (name, rdtype), (ttl, records) in desired.items():
-            hetzner_records = [ZoneRecord(value=v) for v in records]
             key = (name, rdtype)
-
             if key in current_map:
                 existing = current_map[key]
-                if existing.protection and existing.protection.get('change'):
+                if existing.protected:
                     logger.warning('RRSet %s/%s ist geschützt, wird übersprungen', name, rdtype)
                     continue
-                existing_values = sorted(r.value for r in (existing.records or []))
-                if existing_values != records or existing.ttl != ttl:
-                    self.client.zones.set_rrset_records(existing, hetzner_records)
+                if sorted(existing.records) != records or existing.ttl != ttl:
+                    provider.set_rrset_records(zone, existing, records)
                     if existing.ttl != ttl:
-                        self.client.zones.change_rrset_ttl(existing, ttl)
+                        provider.set_rrset_ttl(zone, existing, ttl)
             else:
-                self.client.zones.create_rrset(
-                    zone, name=name, type=rdtype, ttl=ttl, records=hetzner_records,
-                )
+                provider.create_rrset(zone, name, rdtype, ttl, records)
 
         # Delete stale RRSets
         for (name, rdtype), rrset in current_map.items():
             if (name, rdtype) in desired:
                 continue
-            if rrset.protection and rrset.protection.get('change'):
+            if rrset.protected:
                 logger.warning('RRSet %s/%s ist geschützt, Löschung übersprungen', name, rdtype)
                 continue
             try:
-                self.client.zones.delete_rrset(rrset)
-            except hcloud.APIException as e:
+                provider.delete_rrset(zone, rrset)
+            except ProviderError as e:
                 logger.warning('RRSet %s/%s konnte nicht gelöscht werden: %s', name, rdtype, e)
 
     def upload_zone(self, domain: str) -> None:
         self._validate_zone_syntax(domain)
+        provider = self._provider_for[domain]
         try:
             self._sync_zone_rrsets(domain)
-            click.echo(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
-        except hcloud.APIException as e:
+            click.echo(f'Domäne {domain} wurde bei {provider.name} erfolgreich aktualisiert')
+        except ProviderError as e:
             self.exit_status_file.write_text("254", encoding='utf-8')
             raise UploadError(f'\nDomain: {domain}\nError Message: {e}')
 
@@ -281,17 +336,22 @@ class DNSJinja:
             try:
                 self.upload_zone(domain)
             except UploadError as e:
-                click.echo(f'Domäne {domain} konnte bei Hetzner nicht aktualisiert werden: {str(e)}')
+                click.echo(f'Domäne {domain} konnte nicht aktualisiert werden: {str(e)}')
                 continue
 
     def backup_zone(self, domain: str) -> None:
+        provider = self._provider_for[domain]
+        zone = self._zones[domain]
+        if not provider.supports_zonefile_export():
+            click.echo(f'Domäne {domain}: Provider {provider.name} unterstützt keinen '
+                       f'Zonefile-Export – Backup übersprungen')
+            return
         try:
-            zone = self._hetzner_zones[domain]
-            response = self.client.zones.export_zonefile(zone)
+            content = provider.export_zonefile(zone)
             backupfile = self.zone_backups_dir / Path(self.config['domains'][domain]['zone-file'] + f'.{self._get_zone_serial(domain)}')
-            backupfile.write_text(response.zonefile + '\n', encoding='utf-8')
+            backupfile.write_text(content + '\n', encoding='utf-8')
             click.echo(f'Domäne {domain} wurde erfolgreich gesichert')
-        except (hcloud.APIException, OSError) as e:
+        except (ProviderError, OSError) as e:
             click.echo(f'Domäne {domain} konnte nicht gesichert werden: {str(e)}')
 
     def backup_zones(self) -> None:
@@ -313,11 +373,11 @@ class DNSJinja:
 @click.option('-u', '--upload', is_flag=True, default=False, help="Upload der Zonen")
 @click.option('-b', '--backup', is_flag=True, default=False, help="Backup der Zonen")
 @click.option('-w', '--write', is_flag=True, default=False, help="Zone-Files schreiben")
-@click.option('-C', '--create-missing', is_flag=True, default=False, help="Konfigurierte Domains, die bei Hetzner nicht existieren, neu anlegen")
-@click.option('--auth-api-token', default="", envvar='DNSJINJA_AUTH_API_TOKEN', help="API-Token (Bearer) für Hetzner Cloud API (DNSJINJA_AUTH_API_TOKEN)")
+@click.option('-C', '--create-missing', is_flag=True, default=False, help="Konfigurierte Domains, die beim Provider nicht existieren, neu anlegen")
+@click.option('--auth-api-token', default="", envvar='DNSJINJA_AUTH_API_TOKEN', help="API-Token (Bearer) für die DNS-Provider-API (DNSJINJA_AUTH_API_TOKEN)")
 @click.option('--dry-run', 'dry_run', is_flag=True, default=False, help="Zone-Files rendern und ausgeben, ohne zu schreiben oder hochzuladen")
 def run(upload, backup, write, datadir, config, auth_api_token, create_missing, dry_run):
-    """Modulare Verwaltung von DNS-Zonen (Hetzner Cloud API)"""
+    """Modulare Verwaltung von DNS-Zonen über austauschbare Provider-Plugins"""
     if dry_run:
         dnsjinja = DNSJinja(False, False, False, datadir, config, auth_api_token, create_missing)
         dnsjinja.dry_run()
