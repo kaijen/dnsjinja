@@ -4,6 +4,7 @@ config.json
 !testdata/config/config.json
 _tmp_*
 tmp/
+.python-version
 
 # MkDocs build output (mike publiziert nach gh-pages)
 site/

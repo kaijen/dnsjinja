@@ -493,3 +493,231 @@ class TestParseZoneRRSets:
         assert '@' in owners
         assert 'kai' in owners
         assert ('SOA' not in {rdtype for (_, rdtype) in result})
+
+
+# ---------------------------------------------------------------------------
+# _plan_zone_rrsets() / dry_run_compare()
+# ---------------------------------------------------------------------------
+
+def make_rrset(name, rtype, ttl, values, protected=False):
+    """Baut ein gemocktes Hetzner-RRSet."""
+    rrset = MagicMock()
+    rrset.name = name
+    rrset.type = rtype
+    rrset.ttl = ttl
+    rrset.records = [MagicMock(value=v) for v in values]
+    rrset.protection = {'change': True} if protected else None
+    return rrset
+
+
+class TestPlanZoneRRSets:
+    """Der Plan beschreibt die Differenz Live-Daten <-> Template."""
+
+    NS = 'hydrogen.ns.hetzner.com.'
+
+    def _plan(self, data_dir, config_file, mock_client, mock_dns_resolver, current):
+        mock_client.zones.get_rrset_all.return_value = current
+        dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+        return dj, {(c.name, c.rdtype): c for c in dj._plan_zone_rrsets('example.com')}
+
+    def test_fehlendes_rrset_wird_als_create_geplant(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        _, plan = self._plan(data_dir, config_file, mock_client, mock_dns_resolver, [])
+        assert plan[('@', 'NS')].action == 'create'
+        assert self.NS in plan[('@', 'NS')].records
+
+    def test_identisches_rrset_wird_als_unchanged_geplant(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        """Template und Live-Daten gleich -> keine Änderung."""
+        dj0 = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+        ttl, values = dj0._parse_zone_rrsets('example.com')[('@', 'NS')]
+
+        _, plan = self._plan(data_dir, config_file, mock_client, mock_dns_resolver,
+                             [make_rrset('@', 'NS', ttl, values)])
+        assert plan[('@', 'NS')].action == 'unchanged'
+
+    def test_abweichende_ttl_wird_als_update_geplant(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        dj0 = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+        ttl, values = dj0._parse_zone_rrsets('example.com')[('@', 'NS')]
+
+        _, plan = self._plan(data_dir, config_file, mock_client, mock_dns_resolver,
+                             [make_rrset('@', 'NS', ttl + 100, values)])
+        change = plan[('@', 'NS')]
+        assert change.action == 'update'
+        assert change.current_ttl == ttl + 100 and change.ttl == ttl
+
+    def test_ueberzaehliges_rrset_wird_als_delete_geplant(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        _, plan = self._plan(data_dir, config_file, mock_client, mock_dns_resolver,
+                             [make_rrset('alt', 'A', 300, ['192.0.2.1'])])
+        change = plan[('alt', 'A')]
+        assert change.action == 'delete'
+        assert change.current_records == ['192.0.2.1']
+
+    def test_geschuetztes_rrset_wird_als_protected_geplant(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        _, plan = self._plan(data_dir, config_file, mock_client, mock_dns_resolver,
+                             [make_rrset('alt', 'A', 300, ['192.0.2.1'], protected=True)])
+        assert plan[('alt', 'A')].action == 'protected'
+
+    def test_soa_wird_ignoriert(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        """SOA wird von Hetzner verwaltet und taucht im Plan nicht auf."""
+        _, plan = self._plan(data_dir, config_file, mock_client, mock_dns_resolver,
+                             [make_rrset('@', 'SOA', 3600, ['irgendwas'])])
+        assert ('@', 'SOA') not in plan
+
+
+class TestDryRunCompare:
+
+    def test_zeigt_unterschiede_ohne_api_aenderungen(
+        self, data_dir, config_file, mock_client, mock_dns_resolver, capsys
+    ):
+        """Ausgabe listet Änderungen – aber es wird nichts geschrieben."""
+        mock_client.zones.get_rrset_all.return_value = [
+            make_rrset('alt', 'A', 300, ['192.0.2.1'])
+        ]
+        dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+
+        dj.dry_run_compare()
+
+        out = capsys.readouterr().out
+        assert 'example.com' in out
+        assert '+ @/NS' in out
+        assert '- alt/A' in out
+        mock_client.zones.create_rrset.assert_not_called()
+        mock_client.zones.set_rrset_records.assert_not_called()
+        mock_client.zones.delete_rrset.assert_not_called()
+        mock_client.zones.change_rrset_ttl.assert_not_called()
+
+    def test_meldet_keine_unterschiede(
+        self, data_dir, config_file, mock_client, mock_dns_resolver, capsys
+    ):
+        dj0 = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+        ttl, values = dj0._parse_zone_rrsets('example.com')[('@', 'NS')]
+        mock_client.zones.get_rrset_all.return_value = [make_rrset('@', 'NS', ttl, values)]
+
+        dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+        dj.dry_run_compare()
+
+        assert 'Keine Unterschiede' in capsys.readouterr().out
+
+    def test_api_fehler_bricht_nicht_ab(
+        self, data_dir, config_file, mock_client, mock_dns_resolver, capsys
+    ):
+        """Eine unerreichbare Zone beendet den Vergleich nicht."""
+        dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+        mock_client.zones.get_rrset_all.side_effect = hcloud.APIException(
+            code=500, message='Fehler', details={}
+        )
+
+        dj.dry_run_compare()
+
+        assert 'konnten nicht gelesen werden' in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# Trockenlauf-Modi legen keine Zonen an
+# ---------------------------------------------------------------------------
+
+class TestDryRunLegtKeineZonenAn:
+    """--create-missing darf im Trockenlauf niemals greifen."""
+
+    @pytest.mark.parametrize('flag', ['--dry-run', '--dry-run-compare'])
+    def test_create_missing_wird_im_trockenlauf_ignoriert(
+        self, data_dir, mock_client, mock_dns_resolver, flag
+    ):
+        from click.testing import CliRunner
+        from dnsjinja.dnsjinja import run
+
+        # Konfigurierte Domain existiert bei Hetzner nicht
+        config_path = write_config(data_dir, ['neu.de'])
+        mock_client.zones.get_all.return_value = []
+
+        result = CliRunner().invoke(run, [
+            '-d', str(data_dir), '-c', str(config_path),
+            '--auth-api-token', 'test-token', '-C', flag,
+        ])
+
+        assert result.exit_code == 0, result.output
+        mock_client.zones.create.assert_not_called()
+        assert 'im Trockenlauf ignoriert' in result.output
+
+
+# ---------------------------------------------------------------------------
+# TTL-Abweichungen in der Anzeige
+# ---------------------------------------------------------------------------
+
+class TestTTLAnzeige:
+    """Reine TTL-Diffs werden ausgeblendet - der Upload gleicht sie aber an."""
+
+    def _dj_mit_ttl_diff(self, data_dir, config_file, mock_client, mock_dns_resolver):
+        """Live-RRSet mit identischem RDATA, aber abweichender TTL."""
+        dj0 = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+        ttl, values = dj0._parse_zone_rrsets('example.com')[('@', 'NS')]
+        mock_client.zones.get_rrset_all.return_value = [
+            make_rrset('@', 'NS', ttl + 3300, values)
+        ]
+        return make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+
+    def test_reiner_ttl_diff_wird_ausgeblendet(
+        self, data_dir, config_file, mock_client, mock_dns_resolver, capsys
+    ):
+        dj = self._dj_mit_ttl_diff(data_dir, config_file, mock_client, mock_dns_resolver)
+        dj.dry_run_compare()
+
+        out = capsys.readouterr().out
+        assert '~ @/NS' not in out
+        assert 'Keine Unterschiede' in out
+
+    def test_ausgeblendeter_ttl_diff_wird_im_hinweis_genannt(
+        self, data_dir, config_file, mock_client, mock_dns_resolver, capsys
+    ):
+        """Die Anzeige darf nicht verschweigen, dass der Upload die TTL anfasst."""
+        dj = self._dj_mit_ttl_diff(data_dir, config_file, mock_client, mock_dns_resolver)
+        dj.dry_run_compare()
+
+        out = capsys.readouterr().out
+        assert '1 RRSet(s) weichen nur in der TTL ab' in out
+        assert '--show-ttl' in out
+
+    def test_show_ttl_zeigt_den_diff(
+        self, data_dir, config_file, mock_client, mock_dns_resolver, capsys
+    ):
+        dj = self._dj_mit_ttl_diff(data_dir, config_file, mock_client, mock_dns_resolver)
+        dj.dry_run_compare(show_ttl=True)
+
+        out = capsys.readouterr().out
+        assert '~ @/NS' in out and '->' in out
+        assert 'Hinweis:' not in out
+
+    def test_rdata_diff_bleibt_sichtbar_ohne_ttl_pfeil(
+        self, data_dir, config_file, mock_client, mock_dns_resolver, capsys
+    ):
+        """Weicht auch das RDATA ab, wird der Record gezeigt - ohne TTL-Pfeil."""
+        mock_client.zones.get_rrset_all.return_value = [
+            make_rrset('@', 'NS', 3600, ['fremd.ns.example.'])
+        ]
+        dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+        dj.dry_run_compare()
+
+        out = capsys.readouterr().out
+        assert '~ @/NS  (TTL 3600)' in out
+        assert '- fremd.ns.example.' in out
+        assert '->' not in out
+
+    def test_upload_gleicht_ttl_weiterhin_an(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        """Regressionsschutz: die Anzeige-Regel darf den Upload nicht verändern."""
+        dj = self._dj_mit_ttl_diff(data_dir, config_file, mock_client, mock_dns_resolver)
+        dj.upload_zone('example.com')
+
+        mock_client.zones.change_rrset_ttl.assert_called_once()

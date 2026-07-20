@@ -24,6 +24,10 @@ Options:
                          (DNSJINJA_AUTH_API_TOKEN)
   --dry-run              Zone-Files rendern und ausgeben, ohne zu schreiben
                          oder hochzuladen
+  --dry-run-compare      Unterschiede zwischen Live-Daten bei Hetzner und
+                         Templates anzeigen, ohne etwas zu ändern
+  --show-ttl             Bei --dry-run-compare auch reine TTL-Abweichungen
+                         auflisten
   --help                 Show this message and exit.
 ```
 
@@ -39,6 +43,8 @@ Options:
 | `-C`, `--create-missing` | – | Legt konfigurierte, aber bei Hetzner fehlende Domains als primäre Zone an. Ohne das Flag werden sie mit Warnung übersprungen. |
 | `--auth-api-token` | `DNSJINJA_AUTH_API_TOKEN` | Bearer-Token. Wird ohne Angabe bei Bedarf abgefragt. |
 | `--dry-run` | – | Rendert alle Zonen und gibt sie aus, ohne zu schreiben/hochzuladen. |
+| `--dry-run-compare` | – | Vergleicht die Live-RRSets bei Hetzner mit den gerenderten Templates und zeigt die Unterschiede an, ohne etwas zu ändern. |
+| `--show-ttl` | – | Listet bei `--dry-run-compare` auch RRSets auf, die ausschließlich in der TTL abweichen. |
 
 !!! info "Feste Ausführungsreihenfolge"
     Die Flags `-b -w -u` können beliebig kombiniert werden; ausgeführt wird stets
@@ -50,6 +56,9 @@ Options:
 # Trockenlauf: nur rendern und anzeigen
 dnsjinja --dry-run
 
+# Trockenlauf: Unterschiede zum Live-Stand bei Hetzner anzeigen
+dnsjinja --dry-run-compare
+
 # Voller Lauf: Backup, Schreiben, Upload
 dnsjinja -b -w -u
 
@@ -59,6 +68,52 @@ dnsjinja -C -b -w -u
 # Mit explizitem Daten-Repository und Config
 dnsjinja -d /pfad/zum/daten-repo -c config/config.json -b -w -u
 ```
+
+### Ausgabe von `--dry-run-compare`
+
+Der Vergleich liest die aktuellen RRSets jeder Zone über die Hetzner-API und stellt
+sie den gerenderten Templates gegenüber. Es wird **nichts** geschrieben, hochgeladen
+oder gelöscht – die Ausgabe entspricht exakt dem, was ein `-u`-Lauf tun würde.
+
+```text
+=== example.com ===
+  ~ @/A  (TTL 300)
+      - 192.0.2.1
+      + 192.0.2.99
+  + www/CNAME  (TTL 300)
+      + example.com.
+  - alt/A  (TTL 300)
+      - 192.0.2.50
+  ! locked/TXT  geschützt – wird beim Upload übersprungen
+  1 neu, 2 geändert, 1 gelöscht, 1 geschützt, 8 unverändert
+  Hinweis: 1 RRSet(s) weichen nur in der TTL ab. Sie sind oben ausgeblendet,
+  werden beim Upload aber angeglichen – mit --show-ttl anzeigen.
+```
+
+| Zeichen | Bedeutung |
+|---------|-----------|
+| `+` | RRSet existiert bei Hetzner nicht und wird angelegt. |
+| `~` | RRSet existiert, weicht aber im RDATA ab; eingerückte `-`/`+` zeigen die einzelnen Werte. |
+| `-` | RRSet existiert nur bei Hetzner und würde beim Upload gelöscht. |
+| `!` | RRSet ist bei Hetzner änderungsgeschützt und wird beim Upload übersprungen. |
+
+Der `SOA`-Record bleibt außen vor – er wird von Hetzner verwaltet.
+
+#### TTL-Abweichungen
+
+Die TTL wird in den Templates nicht pro Record gesetzt, sondern global über `$TTL`
+vererbt. Reine TTL-Abweichungen sind darum selten beabsichtigt und werden in der
+Ausgabe standardmäßig **ausgeblendet**; `--show-ttl` blendet sie wieder ein.
+
+!!! warning "Der Upload gleicht die TTL trotzdem an"
+    Das Ausblenden betrifft nur die Anzeige. Ein `-u`-Lauf setzt die TTL weiterhin
+    auf den Template-Wert. Die Zusammenfassung weist mit einem `Hinweis:` darauf
+    hin, wenn ausgeblendete TTL-Abweichungen vorliegen.
+
+!!! note "Trockenlauf ändert nie etwas"
+    `--dry-run` und `--dry-run-compare` schließen sich gegenseitig aus. In beiden
+    Modi wird `--create-missing` ignoriert – ein Trockenlauf legt also auch mit `-C`
+    keine Zonen bei Hetzner an.
 
 ## `explore_hetzner`
 

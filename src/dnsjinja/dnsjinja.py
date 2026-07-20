@@ -1,6 +1,7 @@
 from jinja2 import Environment, FileSystemLoader
 from socket import gethostbyname
 from pathlib import Path
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Required, TypedDict
 import hcloud
@@ -36,6 +37,24 @@ class DomainConfigEntry(TypedDict, total=False):
 
 class UploadError(Exception):
     pass
+
+
+@dataclass
+class RRSetChange:
+    """Eine geplante Änderung an einem RRSet (Ergebnis von _plan_zone_rrsets())."""
+    action: str               # 'create' | 'update' | 'delete' | 'protected' | 'unchanged'
+    name: str                 # relativer Owner-Name ('@' für den Apex)
+    rdtype: str
+    ttl: int | None = None            # gewünschte TTL (None bei 'delete')
+    records: list[str] = field(default_factory=list)         # gewünschte RDATA
+    current_ttl: int | None = None    # TTL bei Hetzner (None bei 'create')
+    current_records: list[str] = field(default_factory=list)  # RDATA bei Hetzner
+    rrset: Any = None         # bestehendes Hetzner-RRSet (None bei 'create')
+
+    @property
+    def ttl_only(self) -> bool:
+        """True, wenn sich ausschließlich die TTL unterscheidet (RDATA identisch)."""
+        return self.action == 'update' and self.records == self.current_records
 
 
 class DNSJinja:
@@ -221,49 +240,78 @@ class DNSJinja:
                 result[(rel_name, rdtype)] = (ttl, records)
         return result
 
-    def _sync_zone_rrsets(self, domain: str) -> None:
-        """Synchronisiert gerenderte Zone-RRSets mit Hetzner über die Record-Level-API."""
+    def _plan_zone_rrsets(self, domain: str) -> list[RRSetChange]:
+        """Vergleicht die gerenderte Zone mit den Live-Daten bei Hetzner.
+
+        Liefert die geplanten Änderungen, ohne etwas zu verändern. Basis sowohl
+        für _sync_zone_rrsets() (Ausführung) als auch für dry_run_compare()
+        (Anzeige) – so können Anzeige und Ausführung nicht auseinanderlaufen.
+        """
         zone = self._hetzner_zones[domain]
         desired = self._parse_zone_rrsets(domain)
 
-        current_rrsets = self.client.zones.get_rrset_all(zone)
         current_map: dict[tuple[str, str], Any] = {}
-        for rrset in current_rrsets:
+        for rrset in self.client.zones.get_rrset_all(zone):
             if rrset.type == 'SOA':
                 continue
             current_map[(rrset.name, rrset.type)] = rrset
 
+        changes: list[RRSetChange] = []
+
         # Create / Update
         for (name, rdtype), (ttl, records) in desired.items():
-            hetzner_records = [ZoneRecord(value=v) for v in records]
-            key = (name, rdtype)
-
-            if key in current_map:
-                existing = current_map[key]
-                if existing.protection and existing.protection.get('change'):
-                    logger.warning('RRSet %s/%s ist geschützt, wird übersprungen', name, rdtype)
-                    continue
-                existing_values = sorted(r.value for r in (existing.records or []))
-                if existing_values != records or existing.ttl != ttl:
-                    self.client.zones.set_rrset_records(existing, hetzner_records)
-                    if existing.ttl != ttl:
-                        self.client.zones.change_rrset_ttl(existing, ttl)
+            existing = current_map.get((name, rdtype))
+            if existing is None:
+                changes.append(RRSetChange('create', name, rdtype, ttl=ttl, records=records))
+                continue
+            existing_values = sorted(r.value for r in (existing.records or []))
+            common = dict(ttl=ttl, records=records, current_ttl=existing.ttl,
+                          current_records=existing_values, rrset=existing)
+            if existing.protection and existing.protection.get('change'):
+                changes.append(RRSetChange('protected', name, rdtype, **common))
+            elif existing_values != records or existing.ttl != ttl:
+                changes.append(RRSetChange('update', name, rdtype, **common))
             else:
-                self.client.zones.create_rrset(
-                    zone, name=name, type=rdtype, ttl=ttl, records=hetzner_records,
-                )
+                changes.append(RRSetChange('unchanged', name, rdtype, **common))
 
         # Delete stale RRSets
         for (name, rdtype), rrset in current_map.items():
             if (name, rdtype) in desired:
                 continue
-            if rrset.protection and rrset.protection.get('change'):
-                logger.warning('RRSet %s/%s ist geschützt, Löschung übersprungen', name, rdtype)
+            existing_values = sorted(r.value for r in (rrset.records or []))
+            action = 'protected' if (rrset.protection and rrset.protection.get('change')) else 'delete'
+            changes.append(RRSetChange(action, name, rdtype, current_ttl=rrset.ttl,
+                                       current_records=existing_values, rrset=rrset))
+
+        return changes
+
+    def _sync_zone_rrsets(self, domain: str) -> None:
+        """Synchronisiert gerenderte Zone-RRSets mit Hetzner über die Record-Level-API."""
+        zone = self._hetzner_zones[domain]
+
+        for change in self._plan_zone_rrsets(domain):
+            if change.action == 'unchanged':
                 continue
-            try:
-                self.client.zones.delete_rrset(rrset)
-            except hcloud.APIException as e:
-                logger.warning('RRSet %s/%s konnte nicht gelöscht werden: %s', name, rdtype, e)
+            if change.action == 'protected':
+                logger.warning('RRSet %s/%s ist geschützt, wird übersprungen',
+                               change.name, change.rdtype)
+            elif change.action == 'create':
+                self.client.zones.create_rrset(
+                    zone, name=change.name, type=change.rdtype, ttl=change.ttl,
+                    records=[ZoneRecord(value=v) for v in change.records],
+                )
+            elif change.action == 'update':
+                self.client.zones.set_rrset_records(
+                    change.rrset, [ZoneRecord(value=v) for v in change.records]
+                )
+                if change.current_ttl != change.ttl:
+                    self.client.zones.change_rrset_ttl(change.rrset, change.ttl)
+            elif change.action == 'delete':
+                try:
+                    self.client.zones.delete_rrset(change.rrset)
+                except hcloud.APIException as e:
+                    logger.warning('RRSet %s/%s konnte nicht gelöscht werden: %s',
+                                   change.name, change.rdtype, e)
 
     def upload_zone(self, domain: str) -> None:
         self._validate_zone_syntax(domain)
@@ -306,6 +354,75 @@ class DNSJinja:
             click.echo(f'=== {domain} (Serial: {self._serials[domain]}) ===')
             click.echo(content)
 
+    @staticmethod
+    def _echo_change(change: RRSetChange, show_ttl: bool = False) -> None:
+        label = f'{change.name}/{change.rdtype}'
+        if change.action == 'create':
+            click.echo(f'  + {label}  (TTL {change.ttl})')
+            for v in change.records:
+                click.echo(f'      + {v}')
+        elif change.action == 'delete':
+            click.echo(f'  - {label}  (TTL {change.current_ttl})')
+            for v in change.current_records:
+                click.echo(f'      - {v}')
+        elif change.action == 'update':
+            if show_ttl and change.current_ttl != change.ttl:
+                ttl_info = f'TTL {change.current_ttl} -> {change.ttl}'
+            else:
+                ttl_info = f'TTL {change.current_ttl}'
+            click.echo(f'  ~ {label}  ({ttl_info})')
+            for v in change.current_records:
+                if v not in change.records:
+                    click.echo(f'      - {v}')
+            for v in change.records:
+                if v not in change.current_records:
+                    click.echo(f'      + {v}')
+        elif change.action == 'protected':
+            click.echo(f'  ! {label}  geschützt – wird beim Upload übersprungen')
+
+    def dry_run_compare(self, show_ttl: bool = False) -> None:
+        """Zeigt die Unterschiede zwischen Live-Daten bei Hetzner und Templates an.
+
+        Reine TTL-Abweichungen werden ohne show_ttl ausgeblendet, weil die TTL in
+        den Templates nicht pro Record gesetzt, sondern global über $TTL vererbt
+        wird. Der Upload gleicht sie trotzdem an – darauf weist die Zusammenfassung
+        ausdrücklich hin, damit Anzeige und Upload nicht stillschweigend abweichen.
+        """
+        for domain in self.config['domains']:
+            click.echo(f'=== {domain} ===')
+            self._validate_zone_syntax(domain)
+            try:
+                changes = self._plan_zone_rrsets(domain)
+            except (hcloud.HCloudException, OSError) as e:
+                click.echo(f'  Live-Daten konnten nicht gelesen werden: {e}')
+                continue
+
+            counts = {a: 0 for a in ('create', 'update', 'delete', 'protected', 'unchanged')}
+            ttl_only = 0
+            for change in sorted(changes, key=lambda c: (c.name, c.rdtype)):
+                counts[change.action] += 1
+                if change.ttl_only:
+                    ttl_only += 1
+                    if not show_ttl:
+                        continue
+                self._echo_change(change, show_ttl)
+
+            shown = counts['create'] + counts['delete'] + counts['protected'] + counts['update']
+            if not show_ttl:
+                shown -= ttl_only
+            if not shown:
+                click.echo('  Keine Unterschiede')
+            click.echo(
+                f'  {counts["create"]} neu, {counts["update"]} geändert, '
+                f'{counts["delete"]} gelöscht, {counts["protected"]} geschützt, '
+                f'{counts["unchanged"]} unverändert'
+            )
+            if ttl_only and not show_ttl:
+                click.echo(
+                    f'  Hinweis: {ttl_only} RRSet(s) weichen nur in der TTL ab. Sie sind oben '
+                    'ausgeblendet, werden beim Upload aber angeglichen – mit --show-ttl anzeigen.'
+                )
+
 
 @click.command()
 @click.option('-d', '--datadir', default='.', envvar='DNSJINJA_DATADIR', show_default=True, help="Basisverzeichnis für Templates und Konfiguration (DNSJINJA_DATADIR)")
@@ -316,11 +433,23 @@ class DNSJinja:
 @click.option('-C', '--create-missing', is_flag=True, default=False, help="Konfigurierte Domains, die bei Hetzner nicht existieren, neu anlegen")
 @click.option('--auth-api-token', default="", envvar='DNSJINJA_AUTH_API_TOKEN', help="API-Token (Bearer) für Hetzner Cloud API (DNSJINJA_AUTH_API_TOKEN)")
 @click.option('--dry-run', 'dry_run', is_flag=True, default=False, help="Zone-Files rendern und ausgeben, ohne zu schreiben oder hochzuladen")
-def run(upload, backup, write, datadir, config, auth_api_token, create_missing, dry_run):
+@click.option('--dry-run-compare', 'dry_run_compare', is_flag=True, default=False, help="Unterschiede zwischen Live-Daten bei Hetzner und Templates anzeigen, ohne etwas zu ändern")
+@click.option('--show-ttl', 'show_ttl', is_flag=True, default=False, help="Bei --dry-run-compare auch reine TTL-Abweichungen auflisten")
+def run(upload, backup, write, datadir, config, auth_api_token, create_missing, dry_run, dry_run_compare, show_ttl):
     """Modulare Verwaltung von DNS-Zonen (Hetzner Cloud API)"""
-    if dry_run:
-        dnsjinja = DNSJinja(False, False, False, datadir, config, auth_api_token, create_missing)
-        dnsjinja.dry_run()
+    if dry_run and dry_run_compare:
+        click.echo('--dry-run und --dry-run-compare können nicht kombiniert werden.')
+        sys.exit(1)
+    if dry_run or dry_run_compare:
+        # Trockenlauf: create_missing wird zwingend ignoriert, damit auch mit -C
+        # keine Zonen bei Hetzner angelegt werden.
+        if create_missing:
+            click.echo('Hinweis: --create-missing wird im Trockenlauf ignoriert.')
+        dnsjinja = DNSJinja(False, False, False, datadir, config, auth_api_token, False)
+        if dry_run:
+            dnsjinja.dry_run()
+        else:
+            dnsjinja.dry_run_compare(show_ttl)
     else:
         dnsjinja = DNSJinja(upload, backup, write, datadir, config, auth_api_token, create_missing)
         dnsjinja.backup_zones()

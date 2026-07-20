@@ -63,6 +63,14 @@ oder hochzuladen – ideal zum Prüfen:
 dnsjinja -d . -c config/config.json --dry-run
 ```
 
+`--dry-run-compare` geht einen Schritt weiter und zeigt statt der gerenderten Zonen
+die **Unterschiede zum Live-Stand bei Hetzner** – also genau die Änderungen, die ein
+Upload vornehmen würde:
+
+```bash
+dnsjinja -d . -c config/config.json --dry-run-compare
+```
+
 ## 5. Schreiben & Hochladen
 
 Der typische Lauf kombiniert Backup, Schreiben und Upload:
@@ -90,8 +98,9 @@ die Templates sind damit die maßgebliche Quelle für den Zonen-Inhalt.
 
 !!! danger "Upload ist destruktiv"
     Beim ersten echten Upload werden alle nicht im Template enthaltenen Records der
-    Zone entfernt. Prüfe das Ergebnis vorher mit `--dry-run` und verlasse dich auf das
-    automatische Backup in `zone-backups/`.
+    Zone entfernt. Prüfe vorher mit `--dry-run-compare`, welche Records konkret
+    angelegt, geändert und gelöscht würden, und verlasse dich auf das automatische
+    Backup in `zone-backups/`.
 
 Weiter mit dem [vollständigen Beispiel](beispiel.md), das zeigt, wie aus Konfiguration
 und Includes ein konkretes Zone-File entsteht.

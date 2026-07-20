@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--dry-run-compare` shows the differences between the live RRSets at Hetzner
+  and the rendered templates (new / changed / deleted / protected records) per
+  domain, without changing anything.
+- `--show-ttl` additionally lists RRSets that differ only in their TTL. These
+  are hidden by default, since templates set the TTL globally via `$TTL` rather
+  than per record. Note that the upload still aligns the TTL either way; the
+  summary points this out whenever TTL-only differences were hidden.
+
+### Changed
+- The RRSet comparison used by `--upload` was extracted into
+  `_plan_zone_rrsets()`, so the upload and the new compare output are derived
+  from the same logic and cannot drift apart.
+
+### Fixed
+- `--create-missing` is now ignored in both dry-run modes. Previously
+  `--dry-run -C` created missing zones at Hetzner during what is supposed to be
+  a read-only run.
+
 ## [1.0.1] - 2026-06-25
 
 ### Fixed

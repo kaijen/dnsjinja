@@ -4,7 +4,7 @@ title: 'Bug: CNAME-Apex-Ziel wird als "@" gesendet und von Hetzner abgelehnt'
 status: done
 priority: high
 created: 2026-06-25T20:41:35.875797357+02:00
-updated: 2026-06-25T20:47:27.010104935+02:00
+updated: 2026-06-25T20:53:44.766131282+02:00
 started: 2026-06-25T20:47:27.010103334+02:00
 completed: 2026-06-25T20:47:27.010103334+02:00
 tags:
@@ -72,3 +72,6 @@ hochsetzen.
 
 [[2026-06-25]] Thu 20:47
 Fix angewendet: _parse_zone_rrsets nutzt relativize=False. Tests TestParseZoneRRSets + angepasste Config-Cases grün (66 passed).
+
+[[2026-06-25]] Thu 20:53
+Fix in dnsjinja v1.0.1 (relativize=False in _parse_zone_rrsets) released und produktiv verifiziert: Publish-Workflow grün, 42/42 Zonen gesynct, Apex-CNAMEs der zuvor fehlgeschlagenen Domains (haleb.de, enl-ka.de, enlightened-karlsruhe.de, enlka.de) jetzt korrekt als FQDN.
