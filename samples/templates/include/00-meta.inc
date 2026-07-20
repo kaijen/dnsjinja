@@ -2,4 +2,5 @@
 {% set include_soa = 'include/soa/soa_' + soa|default('hetzner') + '.inc' %}
 {% include include_soa +%}
 {% include include_ns +%}
+registrar IN TXT "{{registrar}}"
 {% include 'include/00-subdomain-meta.inc' +%}

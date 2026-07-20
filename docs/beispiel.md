@@ -30,7 +30,7 @@ Aus diesem Eintrag entscheidet `dnsjinja`, welche Includes eingebunden werden:
 | (Domainname) | `example.com` | `include/custom/example.com.inc` (automatisch) |
 | `custom_groups` | `shared-hosting` | `include/custom-groups/shared-hosting.inc` |
 | (aus Mail-Include) | `example.com` | `include/validation/example.com.inc` (falls vorhanden) |
-| `registrar` | `Hetzner` | TXT-Record `registrar` |
+| `registrar` | `Hetzner` | TXT-Record `registrar` (nur am Apex) |
 | `subdomains` | `blog`, `dev` | je ein eigener Zonen-Abschnitt |
 
 SOA und NS kommen aus den Standard-Providern (`soa_hetzner`, `ns_hetzner`), da kein
@@ -124,6 +124,8 @@ $TTL 300
 @		IN	NS	helium.ns.hetzner.de.
 @		IN	NS	hydrogen.ns.hetzner.com.
 @		IN	NS	oxygen.ns.hetzner.com.
+; Registrar der registrierten Domäne
+registrar IN TXT "Hetzner"
 ; MX records
 @               IN      MX      10 mx1.mail.example.
 @               IN      MX      20 mx2.mail.example.
@@ -154,11 +156,11 @@ vpn             IN      AAAA    2001:db8::20
 @               3600    IN      A       198.51.100.50
 *               3600    IN      CNAME   example.com.
 webmail         3600    IN      CNAME   www
-registrar IN TXT Hetzner
 ```
 
 Direkt im Anschluss folgen die Subdomains. Sie durchlaufen dieselben Provider-Includes,
-aber mit angepasstem `$ORIGIN` – und ohne SOA/NS, da diese nur zur Hauptzone gehören:
+aber mit angepasstem `$ORIGIN` – und ohne SOA/NS, da diese nur zur Hauptzone gehören.
+Auch der `registrar`-Record fehlt: Registriert wird die Domäne, nicht die Subdomäne.
 
 ```dns title="blog.example.com (Subdomain, gekürzt)"
 $ORIGIN blog.example.com.
@@ -170,7 +172,6 @@ autoconfig      IN      CNAME   mail.example.
 @               3600    IN      A       198.51.100.50
 *               3600    IN      CNAME   blog.example.com.
 webmail         3600    IN      CNAME   www
-registrar IN TXT Hetzner
 ```
 
 ## Die anderen beiden Beispiel-Domains
@@ -184,6 +185,7 @@ $TTL 300
 @	IN	NS	helium.ns.hetzner.de.
 @	IN	NS	hydrogen.ns.hetzner.com.
 @	IN	NS	oxygen.ns.hetzner.com.
+registrar IN TXT "Namecheap"
 @   IN MX 10 mx1.mail.example.
 @   IN MX 20 mx2.mail.example.
 autoconfig          IN CNAME mail.example.
@@ -194,7 +196,6 @@ selector2._domainkey IN CNAME selector2._domainkey.mail.example.
 _dmarc IN TXT "v=DMARC1;p=none;rua=mailto:postmaster@example.org"
 @   IN A 198.51.100.10
 www IN A 198.51.100.10
-registrar IN TXT Namecheap
 ```
 
 **`example.net`** (geparkt – nur SOA, NS und Registrar):
@@ -206,7 +207,7 @@ $TTL 300
 @	IN	NS	helium.ns.hetzner.de.
 @	IN	NS	hydrogen.ns.hetzner.com.
 @	IN	NS	oxygen.ns.hetzner.com.
-registrar IN TXT GoDaddy
+registrar IN TXT "GoDaddy"
 ```
 
 ## Eigene Daten ableiten

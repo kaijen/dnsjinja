@@ -196,7 +196,9 @@ class TestSubdomains:
         # Subdomains bekommen ihren eigenen Mail-Block (relativ zum Subdomain-Origin)
         assert ("shop", "MX") in k
         assert ("blog", "MX") in k
-        assert ("registrar.shop", "TXT") in k
+        # Der Registrar gehört zur registrierten Domäne, nicht zu Subdomains
+        assert ("registrar.shop", "TXT") not in k
+        assert ("registrar", "TXT") in k
 
     def test_ohne_subdomains_keine_subrecords(self, build_dj):
         dj = build_dj({"subs.example": dom(mail="mailbox.org")})

@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   summary points this out whenever TTL-only differences were hidden.
 
 ### Changed
+- The `registrar` TXT record is now emitted once at the zone apex instead of
+  once per subdomain. A registrar registers the domain, not its subdomains, so
+  the previous `registrar.<sub>` records described nothing real. Zones that use
+  `subdomains` will lose those records on the next `--upload`; only the apex
+  `registrar` record remains.
+- The `registrar` TXT value is now quoted, so registrar names containing
+  spaces no longer produce an invalid record.
 - The RRSet comparison used by `--upload` was extracted into
   `_plan_zone_rrsets()`, so the upload and the new compare output are derived
   from the same logic and cannot drift apart.

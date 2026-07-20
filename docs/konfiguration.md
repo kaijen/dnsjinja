@@ -28,7 +28,7 @@ Jeder Schlüssel ist ein Domain-Name, der Wert ein Objekt:
 | `mail` | nein | String | Mail-Provider → bindet `include/mail/mail_<wert>.inc` ein |
 | `www` | nein | String | Web-Provider → bindet `include/www/www_<wert>.inc` ein |
 | `xmpp` | nein | String | XMPP-Provider → bindet `include/xmpp/xmpp_<wert>.inc` ein |
-| `registrar` | nein | String | Registrar-Name, wird als TXT-Record `registrar` abgelegt |
+| `registrar` | nein | String | Registrar-Name, wird als TXT-Record `registrar` am Zonen-Apex abgelegt (nicht bei Subdomains) |
 | `subdomains` | nein | Array | Subdomains, die als eigene Zonen-Abschnitte verarbeitet werden |
 | `custom_groups` | nein | Array | gemeinsame Konfigurationsgruppen |
 | `ns` | nein | String | NS-Provider-Override → `include/ns/ns_<wert>.inc` (Standard: `hetzner`) |

@@ -100,7 +100,7 @@ Eigene Records für eine Subdomain kommen in `include/custom/<subdomain>.<domain
 | `domain` | automatisch | aktuell verarbeitete Domain (für Subdomains überschrieben) |
 | `soa_serial` | automatisch | SOA-Seriennummer im Format `JJJJMMTT##` |
 | `mail` / `www` / `xmpp` | Konfiguration | Provider-Auswahl |
-| `registrar` | Konfiguration | Registrar-Name für den TXT-Record |
+| `registrar` | Konfiguration | Registrar-Name für den TXT-Record am Zonen-Apex |
 | `subdomains` | Konfiguration | Liste der Subdomains |
 | `custom_groups` | Konfiguration | Liste der Shared Groups |
 

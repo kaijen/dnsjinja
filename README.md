@@ -313,7 +313,7 @@ Jeder Eintrag im Abschnitt `domains` definiert eine zu verwaltende Domain. Der S
 | `mail` | nein | String | Mail-Provider (wählt `include/mail/mail_<wert>.inc`) |
 | `www` | nein | String | Web-Provider (wählt `include/www/www_<wert>.inc`) |
 | `xmpp` | nein | String | XMPP-Provider (wählt `include/xmpp/xmpp_<wert>.inc`) |
-| `registrar` | nein | String | Name des Registrars (wird als TXT-Record gespeichert) |
+| `registrar` | nein | String | Name des Registrars (wird als TXT-Record am Zonen-Apex gespeichert, nicht bei Subdomains) |
 | `subdomains` | nein | Array | Liste der Subdomains, die als eigene Zonen verarbeitet werden |
 | `custom_groups` | nein | Array | Liste gemeinsamer Konfigurationsgruppen |
 
@@ -424,7 +424,7 @@ Domain-spezifische Custom-Records für Subdomains können in `include/custom/<su
 | `mail` | Konfiguration | Mail-Provider-Auswahl |
 | `www` | Konfiguration | Web-Provider-Auswahl |
 | `xmpp` | Konfiguration | XMPP-Provider-Auswahl |
-| `registrar` | Konfiguration | Registrar-Name für TXT-Record |
+| `registrar` | Konfiguration | Registrar-Name für den TXT-Record am Zonen-Apex |
 | `subdomains` | Konfiguration | Liste der zu verarbeitenden Subdomains |
 | `custom_groups` | Konfiguration | Liste der einzubindenden Shared Groups |
 

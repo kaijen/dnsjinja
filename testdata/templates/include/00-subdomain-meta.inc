@@ -10,4 +10,3 @@
 {% set include_custom_group = 'include/custom-groups/' + cg + '.inc' %}
 {% include include_custom_group ignore missing +%}
 {% endfor %}
-registrar IN TXT {{registrar}}
