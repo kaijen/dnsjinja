@@ -212,7 +212,7 @@ $TTL 3600
         )
         rrsets = self._get_rrset_map(dj, domain)
         assert rrsets[('@', 'A')] == ['192.0.2.1']
-        assert rrsets[('@', 'MX')] == ['10 mail', '20 mxext3.mailbox.org.']
+        assert rrsets[('@', 'MX')] == [f'10 mail.{domain}.', '20 mxext3.mailbox.org.']
         assert rrsets[('@', 'TXT')] == ['"v=spf1 -all"']
         assert rrsets[('mail', 'A')] == ['192.0.2.2']
         assert rrsets[('www', 'A')] == ['192.0.2.1']
