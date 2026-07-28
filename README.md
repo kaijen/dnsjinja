@@ -239,6 +239,8 @@ Das Token wird bei Bedarf abgefragt und ist sicher abzulegen.
 
 Mit dem Flag `-C` / `--create-missing` werden Domains, die in der Konfiguration vorhanden aber noch nicht bei Hetzner eingerichtet sind, automatisch als primäre Zone neu angelegt. Ohne dieses Flag werden solche Domains wie bisher mit einer Warnung übersprungen.
 
+Eine so neu angelegte Domäne ist noch nicht registriert und delegiert, ihre Nameserver antworten also mit `REFUSED`. dnsjinja gibt in diesem Fall eine Warnung aus und startet die SOA-Seriennummer bei `JJJJMMTT01`, statt den Lauf abzubrechen.
+
 Eine Vorlage für eine `config.json` kann mithilfe von `explore_hetzner` aus einem existieren Hetzner-Account erstellt werden.
 `explore_hetzner` wird bei der Installation mit `pip` ebenfalls erzeugt.
 

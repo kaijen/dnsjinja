@@ -329,12 +329,40 @@ class TestZoneSerial:
         soa_99 = MagicMock()
         soa_99.serial = 2026020199
         mock_dns_resolver.resolve.return_value = [soa_99]
+        dj._dns_serials.clear()  # in __init__ gecachten Zähler verwerfen
 
         dj._today = '20260201'  # gleicher Tag wie Serial-Präfix → Inkrement wird versucht
 
         with pytest.raises(SystemExit) as exc_info:
             dj._new_zone_serial('example.com')
         assert exc_info.value.code == 1
+
+    def test_serial_ohne_delegation_startet_bei_01(
+        self, data_dir, config_file, mock_client, mock_dns_resolver, capsys
+    ):
+        """Antwortet kein Nameserver (neue, noch nicht delegierte Domäne), wird JJJJMMTT01 benutzt."""
+        import dns.resolver
+
+        dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+        dj._today = '20260201'
+        dj._dns_serials.clear()
+        mock_dns_resolver.resolve.side_effect = dns.resolver.NoNameservers()
+
+        serial = dj._new_zone_serial('example.com')
+
+        assert serial == '2026020101'
+        assert 'konnte nicht per DNS ermittelt werden' in capsys.readouterr().out
+
+    def test_dns_serial_wird_nur_einmal_abgefragt(
+        self, data_dir, config_file, mock_client, mock_dns_resolver
+    ):
+        """Der per DNS ermittelte Zähler wird gecacht – keine zweite Abfrage pro Domäne."""
+        dj = make_dnsjinja(data_dir, config_file, mock_client, mock_dns_resolver)
+        calls_after_init = mock_dns_resolver.resolve.call_count
+
+        dj._get_zone_serial('example.com')
+
+        assert mock_dns_resolver.resolve.call_count == calls_after_init
 
     def test_serial_wird_in_serials_gecacht(
         self, data_dir, config_file, mock_client, mock_dns_resolver

@@ -143,6 +143,7 @@ class DNSJinja:
 
         self._resolver = dns.resolver.Resolver(configure=False)
         self._resolver.nameservers = self.config["global"]["name-servers"]
+        self._dns_serials: dict[str, str | None] = {}
 
         self._today = datetime.now(timezone.utc).strftime('%Y%m%d')
         self.upload = upload
@@ -162,17 +163,30 @@ class DNSJinja:
     def today(self) -> str:
         return self._today
 
-    def _get_zone_serial(self, domain: str) -> str:
+    def _get_zone_serial(self, domain: str) -> str | None:
+        """Ermittelt den SOA-Zähler per DNS.
+
+        Gibt None zurück, wenn die Zone nicht auflösbar ist. Das ist bei einer frisch
+        angelegten Domäne der Normalfall: Sie muss bei Hetzner existieren, bevor sie
+        registriert und delegiert werden kann, und antwortet bis dahin mit REFUSED.
+        """
+        if domain in self._dns_serials:
+            return self._dns_serials[domain]
         try:
             r = self._resolver.resolve(domain, "SOA")
-            return str(r[0].serial)
+            serial: str | None = str(r[0].serial)
         except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer,
                 dns.resolver.NoNameservers, dns.exception.DNSException) as e:
-            click.echo(f"Fehler beim Ermitteln des SOA-Zählers: {str(e)}")
-            sys.exit(1)
+            click.echo(f"SOA-Zähler für {domain} konnte nicht per DNS ermittelt werden "
+                       f"(Domäne noch nicht delegiert?): {str(e)}")
+            serial = None
+        self._dns_serials[domain] = serial
+        return serial
 
     def _new_zone_serial(self, domain: str) -> str:
         soa_serial = self._get_zone_serial(domain)
+        if soa_serial is None:
+            return self.today + '01'
         serial_prefix = soa_serial[:-2]
         if self.today == serial_prefix:
             suffix_int = int(soa_serial[-2:]) + 1
@@ -336,7 +350,8 @@ class DNSJinja:
         try:
             zone = self._hetzner_zones[domain]
             response = self.client.zones.export_zonefile(zone)
-            backupfile = self.zone_backups_dir / Path(self.config['domains'][domain]['zone-file'] + f'.{self._get_zone_serial(domain)}')
+            serial = self._get_zone_serial(domain) or self._serials[domain]
+            backupfile = self.zone_backups_dir / Path(self.config['domains'][domain]['zone-file'] + f'.{serial}')
             backupfile.write_text(response.zonefile + '\n', encoding='utf-8')
             click.echo(f'Domäne {domain} wurde erfolgreich gesichert')
         except (hcloud.APIException, OSError) as e:

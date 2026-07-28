@@ -18,6 +18,12 @@ Infrastruktur-Einstellungen, die für alle Domains gelten:
 Pfade werden relativ zum `--datadir` aufgelöst. Die `name-servers` werden benutzt, um
 die aktuelle SOA-Seriennummer einer Zone zu ermitteln und hochzuzählen.
 
+Antwortet keiner der Nameserver – etwa bei einer mit `--create-missing` frisch
+angelegten Domäne, die noch nicht registriert bzw. delegiert ist – gibt dnsjinja eine
+Warnung aus und startet die Seriennummer bei `JJJJMMTT01`. Der Lauf bricht deswegen
+nicht ab; die SOA-Seriennummer verwaltet ohnehin Hetzner selbst, dnsjinja lädt sie
+nicht hoch.
+
 ## Abschnitt `domains`
 
 Jeder Schlüssel ist ein Domain-Name, der Wert ein Objekt:

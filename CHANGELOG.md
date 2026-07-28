@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the same logic and cannot drift apart.
 
 ### Fixed
+- A zone whose SOA cannot be resolved no longer aborts the run. A newly created
+  domain has to exist at Hetzner before it can be registered and delegated, so
+  its nameservers answer `REFUSED` until then. dnsjinja now warns and starts the
+  serial at `YYYYMMDD01` instead of exiting. The serial is only used for rendered
+  zone files and backup filenames — Hetzner manages the SOA record itself.
+- The SOA serial is now queried once per domain and run instead of once per
+  serial lookup, so backups no longer trigger a second DNS query.
 - `--create-missing` is now ignored in both dry-run modes. Previously
   `--dry-run -C` created missing zones at Hetzner during what is supposed to be
   a read-only run.
