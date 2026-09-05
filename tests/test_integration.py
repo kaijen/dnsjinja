@@ -60,8 +60,8 @@ def dj(data_dir, integration_config, require_api_token):
 class TestZoneSync:
 
     def test_testdomain_ist_bei_hetzner_vorhanden(self, dj, require_test_domain):
-        """Die Testdomain muss in _hetzner_zones eingetragen sein."""
-        assert require_test_domain in dj._hetzner_zones
+        """Die Testdomain muss in _zones eingetragen sein."""
+        assert require_test_domain in dj._zones
         assert require_test_domain in dj.config['domains']
 
     def test_zone_id_ist_befüllt(self, dj, require_test_domain):
@@ -173,12 +173,12 @@ $TTL 3600
     @staticmethod
     def _get_rrset_map(dj, domain):
         """Liefert {(name, type): [value, ...]} der aktuellen Zone bei Hetzner."""
-        zone = dj._hetzner_zones[domain]
-        rrsets = dj.client.zones.get_rrset_all(zone)
+        zone = dj._zones[domain]
+        rrsets = dj.backend.list_rrsets(zone)
         return {
-            (r.name, r.type): sorted(rec.value for rec in (r.records or []))
+            (r.name, r.rdtype): sorted(r.records)
             for r in rrsets
-            if r.type != 'SOA'
+            if r.rdtype != 'SOA'
         }
 
     @staticmethod
@@ -251,7 +251,7 @@ class TestCreateMissing:
 
         # Die Zone existiert bereits → create() darf nicht aufgerufen worden sein
         # (wir können das nur indirekt prüfen: Domain muss normal befüllt sein)
-        assert require_test_domain in dj._hetzner_zones
+        assert require_test_domain in dj._zones
 
 
 # ---------------------------------------------------------------------------
@@ -293,11 +293,11 @@ class TestTestdataLiveSync:
 
     @staticmethod
     def _rrset_map(dj, domain):
-        zone = dj._hetzner_zones[domain]
+        zone = dj._zones[domain]
         return {
-            (r.name, r.type): sorted(rec.value for rec in (r.records or []))
-            for r in dj.client.zones.get_rrset_all(zone)
-            if r.type != 'SOA'
+            (r.name, r.rdtype): sorted(r.records)
+            for r in dj.backend.list_rrsets(zone)
+            if r.rdtype != 'SOA'
         }
 
     @pytest.fixture(autouse=True)
@@ -336,10 +336,10 @@ class TestTestdataLiveSync:
 
         # TTL aller verwalteten Records (außer dem von Hetzner gepflegten
         # SOA/NS-Satz) muss 300s betragen.
-        zone = dj._hetzner_zones[domain]
+        zone = dj._zones[domain]
         ttls = {
-            r.ttl for r in dj.client.zones.get_rrset_all(zone)
-            if r.type not in ('SOA', 'NS')
+            r.ttl for r in dj.backend.list_rrsets(zone)
+            if r.rdtype not in ('SOA', 'NS')
         }
         assert ttls == {300}, f"Unerwartete TTLs bei Hetzner: {ttls}"
 

@@ -3,6 +3,8 @@ import json
 import pytest
 from pathlib import Path
 
+from .fake_backend import FakeBackend
+
 
 def pytest_configure(config):
     config.addinivalue_line(
@@ -121,29 +123,21 @@ def config_file(data_dir):
 
 @pytest.fixture
 def mock_zone():
-    """Gemocktes BoundZone-Objekt für example.com."""
-    from unittest.mock import MagicMock
-    zone = MagicMock()
-    zone.name = 'example.com'
-    zone.id = 'test-zone-id-123'
-    return zone
+    """Zone-Objekt für example.com in backendneutraler Form."""
+    from dnsjinja.backends import Zone
+    return Zone(name='example.com', zone_id='test-zone-id-123', native=object())
 
 
 @pytest.fixture
-def mock_client(mock_zone):
-    """Vollständig gemockter hcloud.Client."""
-    from unittest.mock import MagicMock, patch
+def fake_backend(mock_zone):
+    """FakeBackend mit example.com, als dnsjinja.dnsjinja.create_backend eingehängt."""
+    from unittest.mock import patch
 
-    export_resp = MagicMock()
-    export_resp.zonefile = '$ORIGIN example.com.\n$TTL 3600\n'
-
-    with patch('dnsjinja.dnsjinja.Client') as mock_class:
-        client = MagicMock()
-        mock_class.return_value = client
-        client.zones.get_all.return_value = [mock_zone]
-        client.zones.export_zonefile.return_value = export_resp
-        client.zones.get_rrset_all.return_value = []
-        yield client
+    backend = FakeBackend.with_zones([mock_zone.name])
+    backend.zones['example.com'] = mock_zone
+    backend.zonefiles['example.com'] = '$ORIGIN example.com.\n$TTL 3600\n'
+    with patch('dnsjinja.dnsjinja.create_backend', side_effect=lambda *a, **kw: backend):
+        yield backend
 
 
 @pytest.fixture
@@ -187,35 +181,11 @@ def make_testdata_config(domains_cfg: dict) -> dict:
     }
 
 
-class _FakeZones:
-    """Minimaler Ersatz für client.zones (nur was _prepare_zones braucht)."""
-
-    def __init__(self, names):
-        from unittest.mock import MagicMock
-        self._zones = []
-        for n in names:
-            z = MagicMock()
-            z.name = n
-            z.id = f'id-{n}'
-            self._zones.append(z)
-
-    def get_all(self):
-        return list(self._zones)
-
-    def get_rrset_all(self, zone):
-        return []
-
-
-class _FakeClient:
-    def __init__(self, names):
-        self.zones = _FakeZones(names)
-
-
 @pytest.fixture
 def build_dj(testdata_dir, tmp_path, mock_dns_resolver, monkeypatch):
     """Factory: baut eine DNSJinja-Instanz gegen testdata/-Templates.
 
-    Hetzner-Client und DNS-Resolver sind gemockt; get_all() liefert genau
+    Backend und DNS-Resolver sind gemockt; list_zones() liefert genau
     die konfigurierten Domains, damit _prepare_zones sie nicht verwirft.
     Reines Rendering – es werden keine Zone-Files geschrieben.
     """
@@ -229,10 +199,10 @@ def build_dj(testdata_dir, tmp_path, mock_dns_resolver, monkeypatch):
         counter['n'] += 1
         cfg_path.write_text(json.dumps(cfg), encoding='utf-8')
 
-        fake = _FakeClient(list(domains_cfg.keys()))
+        fake = FakeBackend.with_zones(list(domains_cfg.keys()))
         monkeypatch.setattr(
-            'dnsjinja.dnsjinja.Client',
-            lambda token, api_endpoint: fake,
+            'dnsjinja.dnsjinja.create_backend',
+            lambda *args, **kwargs: fake,
         )
         return DNSJinja(
             datadir=str(testdata_dir),
