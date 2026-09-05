@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -14,10 +16,25 @@ class GlobalConfig(BaseModel):
     zone_backups: str = Field(alias='zone-backups')
     templates: str
     name_servers: list[str] = Field(alias='name-servers')
-    dns_api_base: str = Field(
-        default='https://api.hetzner.cloud/v1',
+
+    # Name des DNS-Backends. Bewusst ein freies str statt eines Literal, weil
+    # Plugins über Entry-Points weitere Namen beitragen können; ob der Name
+    # auflösbar ist, entscheidet die Registry.
+    dns_backend: str = Field(
+        default='hetzner',
+        alias='dns-backend',
+        pattern=r'^[a-z0-9][a-z0-9._-]*$',
+    )
+    # Nicht gesetzt heißt: die Standard-URL des gewählten Backends.
+    dns_api_base: str | None = Field(
+        default=None,
         alias='dns-api-base',
         pattern=r'^https://',
+    )
+    # Backendspezifische Schalter, ohne dass das Kernschema sie kennen muss.
+    backend_options: dict[str, Any] = Field(
+        default_factory=dict,
+        alias='backend-options',
     )
 
 

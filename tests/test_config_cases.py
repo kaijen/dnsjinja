@@ -316,3 +316,16 @@ class TestTtl:
         dj = build_dj({"d.example": dom(**features)})
         ttls = {ttl for (ttl, _) in rrsets(dj, "d.example").values()}
         assert ttls == {300}, f"Unerwartete TTLs: {ttls}"
+
+
+class TestDesecTemplates:
+    """Die deSEC-Includes liefern dieselbe Struktur wie die Hetzner-Includes."""
+
+    def test_ns_desec_liefert_desec_nameserver(self, build_dj):
+        dj = build_dj({"d.example": dom(ns="desec", soa="desec")})
+        _, vals = rrsets(dj, "d.example")[("@", "NS")]
+        assert vals == ["ns1.desec.io.", "ns2.desec.org."]
+
+    def test_soa_bleibt_ausgeschlossen(self, build_dj):
+        dj = build_dj({"d.example": dom(ns="desec", soa="desec")})
+        assert ("@", "SOA") not in keys(dj, "d.example")

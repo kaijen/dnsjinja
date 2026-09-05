@@ -18,6 +18,7 @@ classifiers = [
 dependencies = [
     "Jinja2>=3.0",
     "hcloud>=2.0",
+    "requests>=2.28",
     "dnspython>=2.3",
     "Click>=8.0",
     "python-dotenv>=1.0",
@@ -26,7 +27,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest"]
+test = ["pytest", "requests-mock>=1.11"]
 docs = ["mkdocs-material>=9.5", "mike>=2.1"]
 
 [project.urls]
@@ -35,8 +36,16 @@ Homepage = "https://github.com/kaijen/dnsjinja"
 
 [project.scripts]
 dnsjinja = "dnsjinja:main"
+explore_dns = "dnsjinja:explore_main"
+# Alter Name, bleibt als Alias erhalten.
 explore_hetzner = "dnsjinja:explore_main"
 exit_on_error = "dnsjinja:exit_on_error"
+
+# Die eingebauten Backends stehen auch als Entry-Points - derselbe Vertrag,
+# den fremde Pakete nutzen.
+[project.entry-points."dnsjinja.backends"]
+hetzner = "dnsjinja.backends.hetzner:HetznerBackend"
+desec = "dnsjinja.backends.desec:DesecBackend"
 
 [tool.hatch.version]
 source = "vcs"

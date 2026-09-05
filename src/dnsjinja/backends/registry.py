@@ -50,10 +50,15 @@ def available_backends() -> dict[str, str]:
     found: dict[str, str] = {}
     for ep in _iter_entry_points():
         if ep.name in _BUILTIN:
-            logger.warning(
-                'Entry-Point %r aus %s überschreibt kein eingebautes Backend und wird ignoriert',
-                ep.name, getattr(ep, 'value', '?'),
-            )
+            # Die eigenen Backends sind absichtlich auch als Entry-Point
+            # eingetragen; nur ein fremdes Paket unter demselben Namen ist
+            # eine Meldung wert.
+            if getattr(ep, 'value', '') != _BUILTIN[ep.name]:
+                logger.warning(
+                    'Entry-Point %r aus %s überschreibt kein eingebautes Backend '
+                    'und wird ignoriert',
+                    ep.name, getattr(ep, 'value', '?'),
+                )
             continue
         found[ep.name] = getattr(getattr(ep, 'dist', None), 'name', None) or 'plugin'
     found.update({name: 'builtin' for name in _BUILTIN})

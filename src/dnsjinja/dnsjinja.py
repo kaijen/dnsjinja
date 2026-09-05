@@ -212,12 +212,25 @@ class DNSJinja:
         return serial
 
     def _new_zone_serial(self, domain: str) -> str:
+        """Bildet den nächsten SOA-Zähler im Format YYYYMMDDNN.
+
+        Der per DNS geholte Zähler muss dieses Format nicht haben: Anbieter, die
+        den SOA-Record selbst pflegen, zählen anders. Ein unlesbarer Zähler
+        beginnt deshalb den heutigen Tag neu, statt den Lauf abzubrechen – der
+        Zähler steckt nur in Dateinamen und im gerenderten Text, nicht in dem,
+        was hochgeladen wird.
+        """
         soa_serial = self._get_zone_serial(domain)
         if soa_serial is None:
             return self.today + '01'
         serial_prefix = soa_serial[:-2]
         if self.today == serial_prefix:
-            suffix_int = int(soa_serial[-2:]) + 1
+            try:
+                suffix_int = int(soa_serial[-2:]) + 1
+            except ValueError:
+                click.echo(f'SOA-Zähler {soa_serial!r} für {domain} folgt nicht dem Format '
+                           'YYYYMMDDNN – der Zähler beginnt heute neu bei 01.')
+                return self.today + '01'
             if suffix_int > 99:
                 click.echo(f'SOA-Zähler für {domain} hat 99 erreicht – kein weiterer Upload heute möglich.')
                 sys.exit(1)

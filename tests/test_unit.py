@@ -715,3 +715,99 @@ class TestTTLAnzeige:
         (change,) = fake_backend.applied[0]
         assert change.action == 'update'
         assert change.current_ttl != change.ttl
+
+
+# ---------------------------------------------------------------------------
+# Backend-Auswahl über config.json
+# ---------------------------------------------------------------------------
+
+class TestBackendAuswahl:
+    """global.dns-backend steuert, welches Backend benutzt wird."""
+
+    def _config_mit(self, data_dir, global_extra):
+        import json as _json
+        from tests.conftest import make_config
+        cfg = make_config(['example.com'])
+        cfg['global'].update(global_extra)
+        path = data_dir / 'config' / 'config.json'
+        path.write_text(_json.dumps(cfg), encoding='utf-8')
+        return path
+
+    def test_ohne_angabe_bleibt_hetzner_der_default(
+        self, data_dir, config_file, fake_backend, mock_dns_resolver
+    ):
+        """Bestehende Konfigurationen ohne dns-backend ändern ihr Verhalten nicht."""
+        dj = make_dnsjinja(data_dir, config_file, fake_backend, mock_dns_resolver)
+        assert dj.backend_name == 'hetzner'
+
+    def test_konfigurierter_name_wird_übernommen(
+        self, data_dir, fake_backend, mock_dns_resolver
+    ):
+        config_path = self._config_mit(data_dir, {'dns-backend': 'desec'})
+        dj = make_dnsjinja(data_dir, config_path, fake_backend, mock_dns_resolver)
+        assert dj.backend_name == 'desec'
+
+    def test_unbekanntes_backend_bricht_mit_namensliste_ab(
+        self, data_dir, fake_backend, mock_dns_resolver, capsys
+    ):
+        config_path = self._config_mit(data_dir, {'dns-backend': 'gibtsnicht'})
+
+        with pytest.raises(SystemExit) as excinfo:
+            make_dnsjinja(data_dir, config_path, fake_backend, mock_dns_resolver)
+
+        assert excinfo.value.code == 1
+        out = capsys.readouterr().out
+        assert 'hetzner' in out and 'desec' in out
+
+    def test_api_base_default_kommt_vom_backend(
+        self, data_dir, config_file, fake_backend, mock_dns_resolver
+    ):
+        dj = make_dnsjinja(data_dir, config_file, fake_backend, mock_dns_resolver)
+        assert dj._api_base == 'https://api.hetzner.cloud/v1'
+
+    def test_desec_bringt_eigene_api_base_mit(
+        self, data_dir, fake_backend, mock_dns_resolver
+    ):
+        config_path = self._config_mit(data_dir, {'dns-backend': 'desec'})
+        dj = make_dnsjinja(data_dir, config_path, fake_backend, mock_dns_resolver)
+        assert dj._api_base == 'https://desec.io/api/v1'
+
+    def test_konfigurierte_api_base_gewinnt(
+        self, data_dir, fake_backend, mock_dns_resolver
+    ):
+        config_path = self._config_mit(
+            data_dir, {'dns-api-base': 'https://dns.example/v1/'}
+        )
+        dj = make_dnsjinja(data_dir, config_path, fake_backend, mock_dns_resolver)
+        assert dj._api_base == 'https://dns.example/v1'
+
+    def test_backendspezifisches_token_wird_gelesen(
+        self, data_dir, fake_backend, mock_dns_resolver, monkeypatch
+    ):
+        monkeypatch.setenv('DNSJINJA_DESEC_AUTH_API_TOKEN', 'desec-token')
+        monkeypatch.setenv('DNSJINJA_AUTH_API_TOKEN', 'allgemeines-token')
+        config_path = self._config_mit(data_dir, {'dns-backend': 'desec'})
+
+        dj = DNSJinja(datadir=str(data_dir), config_file=str(config_path),
+                      auth_api_token='')
+
+        assert dj.auth_api_token == 'desec-token'
+
+    def test_allgemeines_token_als_rückfall(
+        self, data_dir, fake_backend, mock_dns_resolver, monkeypatch
+    ):
+        monkeypatch.delenv('DNSJINJA_DESEC_AUTH_API_TOKEN', raising=False)
+        monkeypatch.setenv('DNSJINJA_AUTH_API_TOKEN', 'allgemeines-token')
+        config_path = self._config_mit(data_dir, {'dns-backend': 'desec'})
+
+        dj = DNSJinja(datadir=str(data_dir), config_file=str(config_path),
+                      auth_api_token='')
+
+        assert dj.auth_api_token == 'allgemeines-token'
+
+    def test_cli_option_schlägt_beide_umgebungsvariablen(
+        self, data_dir, config_file, fake_backend, mock_dns_resolver, monkeypatch
+    ):
+        monkeypatch.setenv('DNSJINJA_AUTH_API_TOKEN', 'aus-der-umgebung')
+        dj = make_dnsjinja(data_dir, config_file, fake_backend, mock_dns_resolver)
+        assert dj.auth_api_token == 'test-token-unit'
