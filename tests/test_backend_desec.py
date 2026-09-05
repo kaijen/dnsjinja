@@ -207,7 +207,7 @@ class TestRatenlimit:
         zones = backend.list_zones()
 
         assert geschlafen == [5.0]
-        assert 'example.com' in zones
+        assert list(zones) == ['example.com']
 
     def test_dauerhaftes_429_wirft_ratelimit_fehler(self, backend, http, monkeypatch):
         monkeypatch.setattr('dnsjinja.backends.desec.time.sleep', lambda s: None)

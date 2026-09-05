@@ -36,7 +36,7 @@ class TestPrepareZones:
         """Domains, die bei Hetzner vorhanden sind, werden korrekt in _zones eingetragen."""
         dj = make_dnsjinja(data_dir, config_file, fake_backend, mock_dns_resolver)
 
-        assert 'example.com' in dj._zones
+        assert list(dj._zones) == ['example.com']
         assert dj.config['domains']['example.com']['zone-id'] == 'test-zone-id-123'
         assert dj.config['domains']['example.com']['zone-file'] == 'example.com.zone'
 
@@ -46,7 +46,7 @@ class TestPrepareZones:
 
         dj = make_dnsjinja(data_dir, config_path, fake_backend, mock_dns_resolver)
 
-        assert 'nicht-vorhanden.de' not in dj.config['domains']
+        assert list(dj.config['domains']) == []
         out = capsys.readouterr().out
         assert 'nicht-vorhanden.de' in out
         assert 'ignoriert' in out
@@ -61,8 +61,8 @@ class TestPrepareZones:
         )
 
         assert fake_backend.created == ['neu-anlegen.de']
-        assert 'neu-anlegen.de' in dj._zones
-        assert dj._zones['neu-anlegen.de'].name == 'neu-anlegen.de' 
+        assert list(dj._zones) == ['neu-anlegen.de']
+        assert dj._zones['neu-anlegen.de'].name == 'neu-anlegen.de'
         assert 'angelegt' in capsys.readouterr().out
 
     def test_create_missing_api_fehler_wird_ignoriert(
@@ -77,7 +77,7 @@ class TestPrepareZones:
             create_missing=True,
         )
 
-        assert 'fehler.de' not in dj.config['domains']
+        assert list(dj.config['domains']) == []
         out = capsys.readouterr().out
         assert 'nicht angelegt' in out
 
@@ -340,7 +340,7 @@ class TestZoneSerial:
         """_create_zone_data() speichert den berechneten Serial in self._serials."""
         dj = make_dnsjinja(data_dir, config_file, fake_backend, mock_dns_resolver)
 
-        assert 'example.com' in dj._serials
+        assert list(dj._serials) == ['example.com']
         assert len(dj._serials['example.com']) == 10
 
     def test_write_zone_files_nutzt_gecachten_serial(
