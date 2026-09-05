@@ -1,6 +1,6 @@
 # CLI-Referenz
 
-Die Installation stellt drei Kommandos bereit: `dnsjinja`, `explore_hetzner` und
+Die Installation stellt drei Kommandos bereit: `dnsjinja`, `explore_dns` und
 `exit_on_error`.
 
 ## `dnsjinja`
@@ -8,7 +8,7 @@ Die Installation stellt drei Kommandos bereit: `dnsjinja`, `explore_hetzner` und
 ```text
 Usage: dnsjinja [OPTIONS]
 
-  Modulare Verwaltung von DNS-Zonen (Hetzner Cloud API)
+  Modulare Verwaltung von DNS-Zonen (Backend über config.json wählbar)
 
 Options:
   -d, --datadir TEXT     Basisverzeichnis für Templates und Konfiguration
@@ -18,13 +18,14 @@ Options:
   -u, --upload           Upload der Zonen
   -b, --backup           Backup der Zonen
   -w, --write            Zone-Files schreiben
-  -C, --create-missing   Konfigurierte Domains, die bei Hetzner nicht
+  -C, --create-missing   Konfigurierte Domains, die beim Backend nicht
                          existieren, neu anlegen
-  --auth-api-token TEXT  API-Token (Bearer) für Hetzner Cloud API
-                         (DNSJINJA_AUTH_API_TOKEN)
+  --auth-api-token TEXT  API-Token für das DNS-Backend
+                         (DNSJINJA_AUTH_API_TOKEN, oder
+                         DNSJINJA_<BACKEND>_AUTH_API_TOKEN)
   --dry-run              Zone-Files rendern und ausgeben, ohne zu schreiben
                          oder hochzuladen
-  --dry-run-compare      Unterschiede zwischen Live-Daten bei Hetzner und
+  --dry-run-compare      Unterschiede zwischen Live-Daten des Backends und
                          Templates anzeigen, ohne etwas zu ändern
   --show-ttl             Bei --dry-run-compare auch reine TTL-Abweichungen
                          auflisten
@@ -37,13 +38,13 @@ Options:
 |--------|--------------|-------------|
 | `-d`, `--datadir` | `DNSJINJA_DATADIR` | Daten-Repository (Templates, Config, Zone-Files). Standard: aktuelles Verzeichnis. |
 | `-c`, `--config` | `DNSJINJA_CONFIG` | Pfad zur Konfigurationsdatei. Standard: `config/config.json`. |
-| `-b`, `--backup` | – | Exportiert jede Zone von Hetzner nach `zone-backups/`. |
+| `-b`, `--backup` | – | Exportiert jede Zone vom Backend nach `zone-backups/`. |
 | `-w`, `--write` | – | Schreibt die gerenderten Zone-Files nach `zone-files/`. |
-| `-u`, `--upload` | – | Synchronisiert die Records mit der Hetzner-Zone (RRSet-Sync, inkl. Löschen veralteter Records). |
-| `-C`, `--create-missing` | – | Legt konfigurierte, aber bei Hetzner fehlende Domains als primäre Zone an. Ohne das Flag werden sie mit Warnung übersprungen. |
+| `-u`, `--upload` | – | Synchronisiert die Records mit der Zone beim Backend (RRSet-Sync, inkl. Löschen veralteter Records). |
+| `-C`, `--create-missing` | – | Legt konfigurierte, aber beim Backend fehlende Domains als primäre Zone an. Ohne das Flag werden sie mit Warnung übersprungen. |
 | `--auth-api-token` | `DNSJINJA_AUTH_API_TOKEN` | Bearer-Token. Wird ohne Angabe bei Bedarf abgefragt. |
 | `--dry-run` | – | Rendert alle Zonen und gibt sie aus, ohne zu schreiben/hochzuladen. |
-| `--dry-run-compare` | – | Vergleicht die Live-RRSets bei Hetzner mit den gerenderten Templates und zeigt die Unterschiede an, ohne etwas zu ändern. |
+| `--dry-run-compare` | – | Vergleicht die Live-RRSets beim Backend mit den gerenderten Templates und zeigt die Unterschiede an, ohne etwas zu ändern. |
 | `--show-ttl` | – | Listet bei `--dry-run-compare` auch RRSets auf, die ausschließlich in der TTL abweichen. |
 
 !!! info "Feste Ausführungsreihenfolge"
@@ -56,13 +57,13 @@ Options:
 # Trockenlauf: nur rendern und anzeigen
 dnsjinja --dry-run
 
-# Trockenlauf: Unterschiede zum Live-Stand bei Hetzner anzeigen
+# Trockenlauf: Unterschiede zum Live-Stand beim Backend anzeigen
 dnsjinja --dry-run-compare
 
 # Voller Lauf: Backup, Schreiben, Upload
 dnsjinja -b -w -u
 
-# Fehlende Domains neu bei Hetzner anlegen und ausspielen
+# Fehlende Domains neu beim Backend anlegen und ausspielen
 dnsjinja -C -b -w -u
 
 # Mit explizitem Daten-Repository und Config
@@ -71,7 +72,7 @@ dnsjinja -d /pfad/zum/daten-repo -c config/config.json -b -w -u
 
 ### Ausgabe von `--dry-run-compare`
 
-Der Vergleich liest die aktuellen RRSets jeder Zone über die Hetzner-API und stellt
+Der Vergleich liest die aktuellen RRSets jeder Zone über das Backend und stellt
 sie den gerenderten Templates gegenüber. Es wird **nichts** geschrieben, hochgeladen
 oder gelöscht – die Ausgabe entspricht exakt dem, was ein `-u`-Lauf tun würde.
 
@@ -92,12 +93,12 @@ oder gelöscht – die Ausgabe entspricht exakt dem, was ein `-u`-Lauf tun würd
 
 | Zeichen | Bedeutung |
 |---------|-----------|
-| `+` | RRSet existiert bei Hetzner nicht und wird angelegt. |
+| `+` | RRSet existiert beim Backend nicht und wird angelegt. |
 | `~` | RRSet existiert, weicht aber im RDATA ab; eingerückte `-`/`+` zeigen die einzelnen Werte. |
-| `-` | RRSet existiert nur bei Hetzner und würde beim Upload gelöscht. |
-| `!` | RRSet ist bei Hetzner änderungsgeschützt und wird beim Upload übersprungen. |
+| `-` | RRSet existiert nur beim Backend und würde beim Upload gelöscht. |
+| `!` | RRSet ist beim Backend änderungsgeschützt und wird beim Upload übersprungen. |
 
-Der `SOA`-Record bleibt außen vor – er wird von Hetzner verwaltet.
+Der `SOA`-Record bleibt außen vor – er wird vom Anbieter verwaltet. Bei deSEC gilt dasselbe zusätzlich für die DNSSEC-Typen.
 
 #### TTL-Abweichungen
 
@@ -113,32 +114,35 @@ Ausgabe standardmäßig **ausgeblendet**; `--show-ttl` blendet sie wieder ein.
 !!! note "Trockenlauf ändert nie etwas"
     `--dry-run` und `--dry-run-compare` schließen sich gegenseitig aus. In beiden
     Modi wird `--create-missing` ignoriert – ein Trockenlauf legt also auch mit `-C`
-    keine Zonen bei Hetzner an.
+    keine Zonen beim Backend an.
 
-## `explore_hetzner`
+## `explore_dns`
 
-Erzeugt aus einem bestehenden Hetzner-Account ein Gerüst für die `config.json` – alle
+Erzeugt aus einem bestehenden Konto ein Gerüst für die `config.json` – alle
 vorhandenen Zonen mit leerem `template`-Feld.
 
 ```text
-Usage: explore_hetzner [OPTIONS]
+Usage: explore_dns [OPTIONS]
 
-  Explore Hetzner DNS Zones (Cloud API)
+  Vorhandene DNS-Zonen eines Backends auslesen
 
 Options:
-  -o, --output FILENAME  Ausgabedatei für die Ergebnisse
-  --auth-api-token TEXT  API-Token (Bearer) für Hetzner Cloud API
-                         (DNSJINJA_AUTH_API_TOKEN)
-  --api-base TEXT        Basis-URL der Hetzner Cloud API (DNSJINJA_API_BASE)
-  --help                 Show this message and exit.
+  -o, --output FILENAME   Ausgabedatei für die Ergebnisse
+  -B, --dns-backend TEXT  DNS-Backend (DNSJINJA_DNS_BACKEND)  [default:
+                          hetzner]
+  --auth-api-token TEXT   API-Token für das DNS-Backend
+                          (DNSJINJA_AUTH_API_TOKEN)
+  --api-base TEXT         Basis-URL der API (DNSJINJA_API_BASE)
+  --list-backends         Verfügbare DNS-Backends auflisten und beenden
+  --help                  Show this message and exit.
 ```
 
 ```bash
 # Auf stdout
-explore_hetzner
+explore_dns
 
 # In eine Datei
-explore_hetzner -o config/config.json
+explore_dns -o config/config.json
 ```
 
 ## `exit_on_error`
@@ -153,10 +157,12 @@ aktualisiert werden konnte. Einsatz siehe [GitHub Actions](github-actions.md).
 
 | Variable | Verwendet von | Beschreibung |
 |----------|---------------|-------------|
-| `DNSJINJA_AUTH_API_TOKEN` | alle | Bearer-Token der Hetzner Cloud API |
+| `DNSJINJA_AUTH_API_TOKEN` | alle | API-Token des DNS-Backends |
+| `DNSJINJA_<BACKEND>_AUTH_API_TOKEN` | alle | Token je Backend, z. B. `DNSJINJA_DESEC_AUTH_API_TOKEN`; schlägt die allgemeine Variable |
 | `DNSJINJA_DATADIR` | `dnsjinja` | Daten-Repository |
 | `DNSJINJA_CONFIG` | `dnsjinja` | Pfad zur Konfigurationsdatei |
-| `DNSJINJA_API_BASE` | `explore_hetzner` | Basis-URL der API (Standard: `https://api.hetzner.cloud/v1`) |
+| `DNSJINJA_API_BASE` | `explore_dns` | Basis-URL der API (Standard: die des gewählten Backends) |
+| `DNSJINJA_DNS_BACKEND` | `explore_dns` | DNS-Backend (Standard: `hetzner`) |
 
 Variablen können auch in einer `.env`-Datei hinterlegt werden – siehe
 [Installation](installation.md#umgebungsvariablen).

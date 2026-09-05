@@ -1,12 +1,8 @@
 from jinja2 import Environment, FileSystemLoader
 from socket import gethostbyname
 from pathlib import Path
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Required, TypedDict
-import hcloud
-from hcloud import Client
-from hcloud.zones.domain import ZoneRecord
+from typing import Required, TypedDict
 import json
 import logging
 import os
@@ -22,6 +18,17 @@ import pydantic
 import tempfile
 from .myloadenv import load_env
 from .dnsjinja_config_schema import DnsJinjaConfig as _DnsJinjaConfigModel
+from .backends import (
+    BackendError,
+    DNSBackend,
+    RRSet,
+    RRSetChange,
+    UnknownBackendError,
+    Zone,
+    available_backends,
+    create_backend,
+    get_backend_class,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,27 +46,15 @@ class UploadError(Exception):
     pass
 
 
-@dataclass
-class RRSetChange:
-    """Eine geplante Änderung an einem RRSet (Ergebnis von _plan_zone_rrsets())."""
-    action: str               # 'create' | 'update' | 'delete' | 'protected' | 'unchanged'
-    name: str                 # relativer Owner-Name ('@' für den Apex)
-    rdtype: str
-    ttl: int | None = None            # gewünschte TTL (None bei 'delete')
-    records: list[str] = field(default_factory=list)         # gewünschte RDATA
-    current_ttl: int | None = None    # TTL bei Hetzner (None bei 'create')
-    current_records: list[str] = field(default_factory=list)  # RDATA bei Hetzner
-    rrset: Any = None         # bestehendes Hetzner-RRSet (None bei 'create')
-
-    @property
-    def ttl_only(self) -> bool:
-        """True, wenn sich ausschließlich die TTL unterscheidet (RDATA identisch)."""
-        return self.action == 'update' and self.records == self.current_records
+# RRSetChange lebt in backends.base, weil DNSBackend.apply_changes() sie als
+# Parametertyp braucht. Hier re-exportiert, damit bestehende Importe aus
+# dnsjinja.dnsjinja weiter funktionieren.
+__all__ = ['DNSJinja', 'RRSetChange', 'UploadError', 'main', 'run']
 
 
 class DNSJinja:
 
-    DEFAULT_API_BASE = "https://api.hetzner.cloud/v1"
+    DEFAULT_BACKEND = 'hetzner'
 
     @staticmethod
     def _check_path(path: str, basedir: str, typ: str, expect: str = 'dir') -> Path:
@@ -74,32 +69,70 @@ class DNSJinja:
         return p
 
     def _prepare_zones(self) -> None:
+        label = self._backend_label
         try:
-            all_zones = self.client.zones.get_all()
+            remote_zones = self.backend.list_zones()
 
-            hetzner_zones = {z.name: z for z in all_zones}
             config_domains = set(self.config['domains'].keys())
-            for d in sorted(config_domains - hetzner_zones.keys()):
-                if self._create_missing:
+            for d in sorted(config_domains - remote_zones.keys()):
+                if self._create_missing and self.backend.capabilities.supports_zone_create:
                     try:
-                        response = self.client.zones.create(name=d, mode="primary")
-                        hetzner_zones[d] = response.zone
-                        click.echo(f'{d} wurde neu bei Hetzner angelegt')
-                    except hcloud.APIException as e:
-                        click.echo(f'{d} konnte bei Hetzner nicht angelegt werden: {e} - wird ignoriert')
+                        remote_zones[d] = self.backend.create_zone(d)
+                        click.echo(f'{d} wurde neu {label} angelegt')
+                    except BackendError as e:
+                        click.echo(f'{d} konnte {label} nicht angelegt werden: {e} - wird ignoriert')
                         del self.config['domains'][d]
                 else:
-                    click.echo(f'{d} ist konfiguriert aber nicht bei Hetzner eingerichtet - wird ignoriert')
+                    click.echo(f'{d} ist konfiguriert aber nicht {label} eingerichtet - wird ignoriert')
                     del self.config['domains'][d]
-            for d in (hetzner_zones.keys() - config_domains):
-                click.echo(f'{d} ist bei Hetzner eingerichtet aber nicht konfiguriert - bitte prüfen')
+            for d in (remote_zones.keys() - config_domains):
+                click.echo(f'{d} ist {label} eingerichtet aber nicht konfiguriert - bitte prüfen')
             for d in self.config['domains'].keys():
-                self.config['domains'][d]['zone-id'] = hetzner_zones[d].id
+                self.config['domains'][d]['zone-id'] = remote_zones[d].zone_id
                 self.config['domains'][d]['zone-file'] = d + '.zone'
-                self._hetzner_zones[d] = hetzner_zones[d]
-        except (hcloud.HCloudException, OSError) as e:
-            click.echo(f'Zonen bei Hetzner konnten nicht ermittelt werden: {e}')
+                self._zones[d] = remote_zones[d]
+        except (BackendError, OSError) as e:
+            click.echo(f'Zonen {label} konnten nicht ermittelt werden: {e}')
             sys.exit(1)
+
+    def _resolve_backend(self, auth_api_token: str) -> None:
+        """Ermittelt Backend-Name, Basis-URL und Token und erzeugt das Backend.
+
+        Der Backend-Name steht in der config.json, die Tokenauflösung hängt
+        davon ab – deshalb passiert beides hier und nicht in run().
+        """
+        global_cfg = self.config['global']
+        backend_name = global_cfg.get('dns-backend', self.DEFAULT_BACKEND)
+        try:
+            backend_cls = get_backend_class(backend_name)
+        except UnknownBackendError as e:
+            click.echo(str(e))
+            sys.exit(1)
+
+        self.backend_name = backend_name
+        self._backend_label = f'beim Backend {backend_name}'
+
+        # Priorität: CLI-Option, backendspezifische Variable, allgemeine Variable.
+        env_specific = f'DNSJINJA_{backend_name.upper().replace("-", "_")}_AUTH_API_TOKEN'
+        self.auth_api_token = (
+            auth_api_token
+            or os.environ.get(env_specific, '')
+            or os.environ.get('DNSJINJA_AUTH_API_TOKEN', '')
+        )
+        if not self.auth_api_token:
+            click.echo(
+                'Kein API-Token angegeben. Bitte --auth-api-token, '
+                f'{env_specific} oder DNSJINJA_AUTH_API_TOKEN setzen.'
+            )
+            sys.exit(1)
+
+        self._api_base = (
+            global_cfg.get('dns-api-base') or backend_cls.default_api_base
+        ).rstrip('/')
+        self.backend: DNSBackend = create_backend(
+            backend_name, token=self.auth_api_token, api_base=self._api_base,
+            options=global_cfg.get('backend-options', {}),
+        )
 
     def __init__(self, upload: bool = False, backup: bool = False,
                  write_zone: bool = False, datadir: str = "",
@@ -130,14 +163,9 @@ class DNSJinja:
         # noinspection PyTypeChecker
         self.zone_backups_dir = DNSJinja._check_path(self.config['global']['zone-backups'], self.datadir, 'Zone-Backup-Verzeichnis', expect='dir')
 
-        self.auth_api_token = auth_api_token
-        if not self.auth_api_token:
-            click.echo('Kein API-Token angegeben. Bitte --auth-api-token oder DNSJINJA_AUTH_API_TOKEN setzen.')
-            sys.exit(1)
-        self._api_base = self.config['global'].get('dns-api-base', self.DEFAULT_API_BASE).rstrip('/')
-        self.client = Client(token=self.auth_api_token, api_endpoint=self._api_base)
-        self._hetzner_zones: dict[str, Any] = {}
+        self._zones: dict[str, Zone] = {}
         self._create_missing: bool = create_missing
+        self._resolve_backend(auth_api_token)
 
         self._prepare_zones()
 
@@ -167,7 +195,7 @@ class DNSJinja:
         """Ermittelt den SOA-Zähler per DNS.
 
         Gibt None zurück, wenn die Zone nicht auflösbar ist. Das ist bei einer frisch
-        angelegten Domäne der Normalfall: Sie muss bei Hetzner existieren, bevor sie
+        angelegten Domäne der Normalfall: Sie muss beim Backend existieren, bevor sie
         registriert und delegiert werden kann, und antwortet bis dahin mit REFUSED.
         """
         if domain in self._dns_serials:
@@ -184,12 +212,25 @@ class DNSJinja:
         return serial
 
     def _new_zone_serial(self, domain: str) -> str:
+        """Bildet den nächsten SOA-Zähler im Format YYYYMMDDNN.
+
+        Der per DNS geholte Zähler muss dieses Format nicht haben: Anbieter, die
+        den SOA-Record selbst pflegen, zählen anders. Ein unlesbarer Zähler
+        beginnt deshalb den heutigen Tag neu, statt den Lauf abzubrechen – der
+        Zähler steckt nur in Dateinamen und im gerenderten Text, nicht in dem,
+        was hochgeladen wird.
+        """
         soa_serial = self._get_zone_serial(domain)
         if soa_serial is None:
             return self.today + '01'
         serial_prefix = soa_serial[:-2]
         if self.today == serial_prefix:
-            suffix_int = int(soa_serial[-2:]) + 1
+            try:
+                suffix_int = int(soa_serial[-2:]) + 1
+            except ValueError:
+                click.echo(f'SOA-Zähler {soa_serial!r} für {domain} folgt nicht dem Format '
+                           'YYYYMMDDNN – der Zähler beginnt heute neu bei 01.')
+                return self.today + '01'
             if suffix_int > 99:
                 click.echo(f'SOA-Zähler für {domain} hat 99 erreicht – kein weiterer Upload heute möglich.')
                 sys.exit(1)
@@ -232,11 +273,12 @@ class DNSJinja:
     def _parse_zone_rrsets(self, domain: str) -> dict[tuple[str, str], tuple[int, list[str]]]:
         """Parse gerenderten Zonentext in {(name, rdtype): (ttl, [rdata_values])}.
 
-        SOA-Records werden ausgeschlossen (von Hetzner verwaltet).
+        SOA-Records werden ausgeschlossen (vom Anbieter verwaltet).
         Owner-Namen werden relativ ausgegeben (inkl. '@' für den Apex, wie
-        Hetzner sie erwartet). RDATA-Ziele werden als FQDN ausgegeben, damit
-        ein CNAME-Ziel auf den Zonen-Apex nicht zu '@' kollabiert (Hetzner
-        lehnt '@' als CNAME-Wert mit invalid_input ab).
+        die Backends sie erwarten). RDATA-Ziele werden als FQDN ausgegeben,
+        damit ein CNAME-Ziel auf den Zonen-Apex nicht zu '@' kollabiert – Hetzner
+        lehnt '@' als CNAME-Wert mit invalid_input ab, deSEC verlangt für
+        CNAME/MX/NS/SRV ebenfalls absolute Namen.
         """
         origin = dns.name.from_text(domain)
         parsed = dns.zone.from_text(self.zones[domain], origin=origin)
@@ -255,86 +297,92 @@ class DNSJinja:
         return result
 
     def _plan_zone_rrsets(self, domain: str) -> list[RRSetChange]:
-        """Vergleicht die gerenderte Zone mit den Live-Daten bei Hetzner.
+        """Vergleicht die gerenderte Zone mit den Live-Daten des Backends.
 
         Liefert die geplanten Änderungen, ohne etwas zu verändern. Basis sowohl
         für _sync_zone_rrsets() (Ausführung) als auch für dry_run_compare()
         (Anzeige) – so können Anzeige und Ausführung nicht auseinanderlaufen.
-        """
-        zone = self._hetzner_zones[domain]
-        desired = self._parse_zone_rrsets(domain)
 
-        current_map: dict[tuple[str, str], Any] = {}
-        for rrset in self.client.zones.get_rrset_all(zone):
-            if rrset.type == 'SOA':
-                continue
-            current_map[(rrset.name, rrset.type)] = rrset
+        Die Normalisierung auf die Grenzen des Backends (TTL, nicht schreibbare
+        RR-Typen, RDATA-Form) passiert hier und damit für beide Pfade gemeinsam.
+        Läge sie später, zeigte der Trockenlauf andere Daten als der Upload
+        schreibt.
+        """
+        zone = self._zones[domain]
+        desired, warnings = self.backend.normalize_desired(
+            zone, self._parse_zone_rrsets(domain)
+        )
+        for warning in warnings:
+            logger.warning('%s: %s', domain, warning)
+
+        current_map = {r.key: r for r in self.backend.list_rrsets(zone)}
 
         changes: list[RRSetChange] = []
 
         # Create / Update
-        for (name, rdtype), (ttl, records) in desired.items():
-            existing = current_map.get((name, rdtype))
+        for key, want in desired.items():
+            name, rdtype = key
+            existing = current_map.get(key)
             if existing is None:
-                changes.append(RRSetChange('create', name, rdtype, ttl=ttl, records=records))
+                changes.append(RRSetChange('create', name, rdtype,
+                                           ttl=want.ttl, records=list(want.records)))
                 continue
-            existing_values = sorted(r.value for r in (existing.records or []))
-            common = dict(ttl=ttl, records=records, current_ttl=existing.ttl,
-                          current_records=existing_values, rrset=existing)
-            if existing.protection and existing.protection.get('change'):
+            existing_values = list(existing.records)
+            common = dict(ttl=want.ttl, records=list(want.records),
+                          current_ttl=existing.ttl, current_records=existing_values,
+                          current=existing)
+            if existing.protected:
                 changes.append(RRSetChange('protected', name, rdtype, **common))
-            elif existing_values != records or existing.ttl != ttl:
+            elif existing_values != list(want.records) or existing.ttl != want.ttl:
                 changes.append(RRSetChange('update', name, rdtype, **common))
             else:
                 changes.append(RRSetChange('unchanged', name, rdtype, **common))
 
         # Delete stale RRSets
-        for (name, rdtype), rrset in current_map.items():
-            if (name, rdtype) in desired:
+        for key, existing in current_map.items():
+            if key in desired:
                 continue
-            existing_values = sorted(r.value for r in (rrset.records or []))
-            action = 'protected' if (rrset.protection and rrset.protection.get('change')) else 'delete'
-            changes.append(RRSetChange(action, name, rdtype, current_ttl=rrset.ttl,
-                                       current_records=existing_values, rrset=rrset))
+            name, rdtype = key
+            action = 'protected' if existing.protected else 'delete'
+            changes.append(RRSetChange(action, name, rdtype,
+                                       current_ttl=existing.ttl,
+                                       current_records=list(existing.records),
+                                       current=existing))
 
         return changes
 
     def _sync_zone_rrsets(self, domain: str) -> None:
-        """Synchronisiert gerenderte Zone-RRSets mit Hetzner über die Record-Level-API."""
-        zone = self._hetzner_zones[domain]
+        """Übergibt den Änderungsplan an das Backend."""
+        zone = self._zones[domain]
 
+        actionable: list[RRSetChange] = []
         for change in self._plan_zone_rrsets(domain):
-            if change.action == 'unchanged':
-                continue
             if change.action == 'protected':
                 logger.warning('RRSet %s/%s ist geschützt, wird übersprungen',
                                change.name, change.rdtype)
-            elif change.action == 'create':
-                self.client.zones.create_rrset(
-                    zone, name=change.name, type=change.rdtype, ttl=change.ttl,
-                    records=[ZoneRecord(value=v) for v in change.records],
-                )
-            elif change.action == 'update':
-                self.client.zones.set_rrset_records(
-                    change.rrset, [ZoneRecord(value=v) for v in change.records]
-                )
-                if change.current_ttl != change.ttl:
-                    self.client.zones.change_rrset_ttl(change.rrset, change.ttl)
-            elif change.action == 'delete':
-                try:
-                    self.client.zones.delete_rrset(change.rrset)
-                except hcloud.APIException as e:
-                    logger.warning('RRSet %s/%s konnte nicht gelöscht werden: %s',
-                                   change.name, change.rdtype, e)
+            elif change.action in ('create', 'update', 'delete'):
+                actionable.append(change)
+
+        result = self.backend.apply_changes(zone, actionable)
+        for warning in result.warnings:
+            logger.warning('%s: %s', domain, warning)
+        for change, reason in result.skipped:
+            click.echo(f'  RRSet {change.name}/{change.rdtype} übersprungen: {reason}')
+        self._last_apply_skipped = len(result.skipped)
 
     def upload_zone(self, domain: str) -> None:
         self._validate_zone_syntax(domain)
+        self._last_apply_skipped = 0
         try:
             self._sync_zone_rrsets(domain)
-            click.echo(f'Domäne {domain} wurde bei Hetzner erfolgreich aktualisiert')
-        except hcloud.APIException as e:
+        except BackendError as e:
             self.exit_status_file.write_text("254", encoding='utf-8')
             raise UploadError(f'\nDomain: {domain}\nError Message: {e}')
+        if self._last_apply_skipped:
+            click.echo(f'Domäne {domain} wurde {self._backend_label} mit Einschränkungen '
+                       f'aktualisiert ({self._last_apply_skipped} übersprungen)')
+        else:
+            click.echo(f'Domäne {domain} wurde {self._backend_label} erfolgreich aktualisiert')
 
     def upload_zones(self) -> None:
         if not self.upload:
@@ -343,18 +391,23 @@ class DNSJinja:
             try:
                 self.upload_zone(domain)
             except UploadError as e:
-                click.echo(f'Domäne {domain} konnte bei Hetzner nicht aktualisiert werden: {str(e)}')
+                click.echo(f'Domäne {domain} konnte {self._backend_label} nicht '
+                           f'aktualisiert werden: {str(e)}')
                 continue
 
     def backup_zone(self, domain: str) -> None:
+        if not self.backend.capabilities.supports_zonefile_export:
+            click.echo(f'Domäne {domain} kann nicht gesichert werden: Backend '
+                       f'{self.backend_name} kennt keinen Zonefile-Export')
+            return
         try:
-            zone = self._hetzner_zones[domain]
-            response = self.client.zones.export_zonefile(zone)
+            zone = self._zones[domain]
+            zonefile = self.backend.export_zonefile(zone)
             serial = self._get_zone_serial(domain) or self._serials[domain]
             backupfile = self.zone_backups_dir / Path(self.config['domains'][domain]['zone-file'] + f'.{serial}')
-            backupfile.write_text(response.zonefile + '\n', encoding='utf-8')
+            backupfile.write_text(zonefile + '\n', encoding='utf-8')
             click.echo(f'Domäne {domain} wurde erfolgreich gesichert')
-        except (hcloud.APIException, OSError) as e:
+        except (BackendError, OSError) as e:
             click.echo(f'Domäne {domain} konnte nicht gesichert werden: {str(e)}')
 
     def backup_zones(self) -> None:
@@ -396,7 +449,7 @@ class DNSJinja:
             click.echo(f'  ! {label}  geschützt – wird beim Upload übersprungen')
 
     def dry_run_compare(self, show_ttl: bool = False) -> None:
-        """Zeigt die Unterschiede zwischen Live-Daten bei Hetzner und Templates an.
+        """Zeigt die Unterschiede zwischen Live-Daten des Backends und Templates an.
 
         Reine TTL-Abweichungen werden ohne show_ttl ausgeblendet, weil die TTL in
         den Templates nicht pro Record gesetzt, sondern global über $TTL vererbt
@@ -408,7 +461,7 @@ class DNSJinja:
             self._validate_zone_syntax(domain)
             try:
                 changes = self._plan_zone_rrsets(domain)
-            except (hcloud.HCloudException, OSError) as e:
+            except (BackendError, OSError) as e:
                 click.echo(f'  Live-Daten konnten nicht gelesen werden: {e}')
                 continue
 
@@ -445,19 +498,19 @@ class DNSJinja:
 @click.option('-u', '--upload', is_flag=True, default=False, help="Upload der Zonen")
 @click.option('-b', '--backup', is_flag=True, default=False, help="Backup der Zonen")
 @click.option('-w', '--write', is_flag=True, default=False, help="Zone-Files schreiben")
-@click.option('-C', '--create-missing', is_flag=True, default=False, help="Konfigurierte Domains, die bei Hetzner nicht existieren, neu anlegen")
-@click.option('--auth-api-token', default="", envvar='DNSJINJA_AUTH_API_TOKEN', help="API-Token (Bearer) für Hetzner Cloud API (DNSJINJA_AUTH_API_TOKEN)")
+@click.option('-C', '--create-missing', is_flag=True, default=False, help="Konfigurierte Domains, die beim Backend nicht existieren, neu anlegen")
+@click.option('--auth-api-token', default="", envvar='DNSJINJA_AUTH_API_TOKEN', help="API-Token für das DNS-Backend (DNSJINJA_AUTH_API_TOKEN, oder DNSJINJA_<BACKEND>_AUTH_API_TOKEN)")
 @click.option('--dry-run', 'dry_run', is_flag=True, default=False, help="Zone-Files rendern und ausgeben, ohne zu schreiben oder hochzuladen")
-@click.option('--dry-run-compare', 'dry_run_compare', is_flag=True, default=False, help="Unterschiede zwischen Live-Daten bei Hetzner und Templates anzeigen, ohne etwas zu ändern")
+@click.option('--dry-run-compare', 'dry_run_compare', is_flag=True, default=False, help="Unterschiede zwischen Live-Daten des Backends und Templates anzeigen, ohne etwas zu ändern")
 @click.option('--show-ttl', 'show_ttl', is_flag=True, default=False, help="Bei --dry-run-compare auch reine TTL-Abweichungen auflisten")
 def run(upload, backup, write, datadir, config, auth_api_token, create_missing, dry_run, dry_run_compare, show_ttl):
-    """Modulare Verwaltung von DNS-Zonen (Hetzner Cloud API)"""
+    """Modulare Verwaltung von DNS-Zonen (Backend über config.json wählbar)"""
     if dry_run and dry_run_compare:
         click.echo('--dry-run und --dry-run-compare können nicht kombiniert werden.')
         sys.exit(1)
     if dry_run or dry_run_compare:
         # Trockenlauf: create_missing wird zwingend ignoriert, damit auch mit -C
-        # keine Zonen bei Hetzner angelegt werden.
+        # keine Zonen beim Backend angelegt werden.
         if create_missing:
             click.echo('Hinweis: --create-missing wird im Trockenlauf ignoriert.')
         dnsjinja = DNSJinja(False, False, False, datadir, config, auth_api_token, False)

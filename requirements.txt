@@ -1,7 +1,8 @@
 Jinja2
 hcloud
+requests
 dnspython
 Click
 python-dotenv
-jsonschema
-appdirs
+pydantic
+platformdirs
