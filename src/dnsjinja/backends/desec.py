@@ -23,6 +23,7 @@ import logging
 import time
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
+from urllib.parse import urlsplit
 
 import requests
 
@@ -89,6 +90,27 @@ class DesecBackend(DNSBackend):
     # HTTP
     # ------------------------------------------------------------------
 
+    def _absolute_url(self, path: str) -> str:
+        """Setzt einen relativen Pfad an die Basis-URL – und prüft absolute URLs.
+
+        Absolute URLs kommen ausschließlich aus dem ``Link``-Header der Gegenseite
+        (Cursor-Paginierung). Die Session trägt das API-Token in jedem Request,
+        also darf eine Antwort uns nicht auf einen fremden Host schicken: Sonst
+        genügt eine manipulierte Antwort, um das Token abzugreifen. Deshalb muss
+        eine absolute URL denselben Ursprung haben wie die Basis-URL.
+        """
+        if not path.startswith(('http://', 'https://')):
+            return f'{self.api_base}{path}'
+
+        basis = urlsplit(self.api_base)
+        ziel = urlsplit(path)
+        if (ziel.scheme, ziel.netloc) != (basis.scheme, basis.netloc):
+            raise BackendValidationError(
+                f'deSEC verweist auf einen fremden Ursprung: {ziel.scheme}://{ziel.netloc} '
+                f'statt {basis.scheme}://{basis.netloc} – Anfrage wird nicht gesendet'
+            )
+        return path
+
     def _request(self, method: str, path: str, **kwargs: Any) -> requests.Response:
         """Setzt einen Request ab und übersetzt Fehler in BackendError.
 
@@ -96,7 +118,7 @@ class DesecBackend(DNSBackend):
         Ratenlimits von deSEC sind eng genug, dass ein Lauf über mehrere
         Domains sie regulär erreicht.
         """
-        url = path if path.startswith('http') else f'{self.api_base}{path}'
+        url = self._absolute_url(path)
         kwargs.setdefault('timeout', self.timeout)
 
         for attempt in range(self.max_retries + 1):

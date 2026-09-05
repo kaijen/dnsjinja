@@ -238,3 +238,62 @@ class TestFehlerübersetzung:
         http.get(f'{API}/domains/', exc=requests.exceptions.ConnectTimeout)
         with pytest.raises(BackendUnavailableError):
             backend.list_zones()
+
+
+class TestPaginierungsZiel:
+    """Eine Antwort darf uns nicht mit dem Token zu einem fremden Host schicken."""
+
+    def test_link_auf_fremden_host_wird_abgelehnt(self, backend, http):
+        boese = 'https://angreifer.example/abgriff'
+        http.get(f'{API}/domains/example.com/rrsets/',
+                 json=[{'subname': 'a', 'type': 'A', 'ttl': 3600,
+                        'records': ['192.0.2.1']}],
+                 headers={'Link': f'<{boese}>; rel="next"'})
+
+        with pytest.raises(BackendValidationError) as excinfo:
+            backend.list_rrsets(ZONE)
+
+        assert 'fremden Ursprung' in str(excinfo.value)
+        assert boese not in [r.url for r in http.request_history[1:]]
+
+    def test_kein_request_an_den_fremden_host(self, backend, http):
+        """Das Token darf den fremden Host nie erreichen."""
+        boese = 'https://angreifer.example/abgriff'
+        http.get(f'{API}/domains/', json=[{'name': 'example.com', 'minimum_ttl': 3600}],
+                 headers={'Link': f'<{boese}>; rel="next"'})
+
+        with pytest.raises(BackendValidationError):
+            backend.list_zones()
+
+        assert all('angreifer.example' not in r.url for r in http.request_history)
+
+    def test_gleicher_ursprung_wird_gefolgt(self, backend, http):
+        seite2 = f'{API}/domains/?cursor=zwei'
+        http.get(f'{API}/domains/', [
+            {'json': [{'name': 'a.example', 'minimum_ttl': 3600}],
+             'headers': {'Link': f'<{seite2}>; rel="next"'}},
+            {'json': [{'name': 'b.example', 'minimum_ttl': 3600}]},
+        ])
+
+        assert sorted(backend.list_zones()) == ['a.example', 'b.example']
+
+    def test_anderes_schema_wird_abgelehnt(self, backend, http):
+        """http statt https auf demselben Host ist ebenfalls ein Ursprungswechsel."""
+        http.get(f'{API}/domains/', json=[],
+                 headers={'Link': '<http://desec.io/api/v1/domains/?cursor=x>; rel="next"'})
+
+        with pytest.raises(BackendValidationError):
+            backend.list_zones()
+
+    def test_eigene_api_base_bleibt_erlaubt(self, http):
+        """Eine selbst konfigurierte Basis-URL definiert den erlaubten Ursprung."""
+        b = DesecBackend(token='t', api_base='https://dns.intern.example/api/v1')
+        seite2 = 'https://dns.intern.example/api/v1/domains/?cursor=zwei'
+        http.get('https://dns.intern.example/api/v1/domains/', [
+            {'json': [{'name': 'a.example', 'minimum_ttl': 3600}],
+             'headers': {'Link': f'<{seite2}>; rel="next"'}},
+            {'json': []},
+        ])
+
+        assert list(b.list_zones()) == ['a.example']
+        b.close()
