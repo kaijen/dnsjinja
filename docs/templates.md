@@ -44,6 +44,12 @@ standard.tpl (je Domain)
 
 ## Dynamische Provider-Auswahl
 
+!!! note "Provider ist nicht Backend"
+    *Provider* meint hier die Service-Provider auf Template-Ebene – wer die Mails
+    annimmt, wo der Webserver steht, welche Nameserver in der Zone stehen. Über welche
+    API hochgeladen wird, entscheidet davon unabhängig `global.dns-backend`; siehe
+    [DNS-Backends](dns-backends.md).
+
 Include-Dateinamen werden aus den Konfigurationswerten zusammengesetzt:
 
 ```jinja2

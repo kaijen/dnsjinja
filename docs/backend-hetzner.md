@@ -1,6 +1,8 @@
-# Hetzner Cloud API
+# Hetzner Cloud
 
-`dnsjinja` kommuniziert ausschließlich über die offizielle Python-Bibliothek
+Backend-Name: `hetzner` (Standard). Standard-URL: `https://api.hetzner.cloud/v1`.
+
+`dnsjinja` kommuniziert über die offizielle Python-Bibliothek
 [hcloud-python](https://github.com/hetznercloud/hcloud-python) mit der
 [Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions).
 HTTP-Aufrufe, Authentifizierung und Paginierung übernimmt die Bibliothek.
@@ -16,9 +18,8 @@ erstellt: **Projekt → Security → API Tokens → Generate API Token** mit
     DNS-Konsole (`dns.hetzner.com`) funktionieren mit der Cloud API **nicht** und
     führen zu Authentifizierungsfehlern.
 
-Das Token wird über `--auth-api-token`, die Umgebungsvariable
-`DNSJINJA_AUTH_API_TOKEN` oder eine `.env`-Datei bereitgestellt. Ist es nicht gesetzt,
-fragt `dnsjinja` es bei Bedarf interaktiv ab.
+Das Token wird über `--auth-api-token`, `DNSJINJA_HETZNER_AUTH_API_TOKEN`,
+`DNSJINJA_AUTH_API_TOKEN` oder eine `.env`-Datei bereitgestellt.
 
 ## Basis-URL überschreiben
 
@@ -26,9 +27,12 @@ Standardmäßig spricht `dnsjinja` `https://api.hetzner.cloud/v1` an. Die Basis-
 sich überschreiben:
 
 - in der `config.json` über `global.dns-api-base`
-- für `explore_hetzner` über `--api-base` bzw. `DNSJINJA_API_BASE`
+- für `explore_dns` über `--api-base` bzw. `DNSJINJA_API_BASE`
 
 ## Verwendete Operationen
+
+Die Aufrufe stecken im Backend `dnsjinja.backends.hetzner`; der Kern von `dnsjinja`
+kennt sie nicht.
 
 | Operation | hcloud-Methode | Verwendet für |
 |-----------|----------------|---------------|
@@ -44,7 +48,8 @@ sich überschreiben:
 ## So funktioniert der Upload (RRSet-Sync)
 
 Der Upload arbeitet auf Record-Ebene und macht die Hetzner-Zone deckungsgleich mit dem
-gerenderten Template:
+gerenderten Template. Anders als bei deSEC gibt es keinen Sammelaufruf: Bricht der Lauf
+in der Mitte ab, sind die vorherigen Änderungen bereits wirksam.
 
 1. **Rendern & validieren** – das Zone-File wird gerendert und mit dnspython auf
    Syntax geprüft. Fehler brechen den Lauf für diese Domain ab.
@@ -59,3 +64,11 @@ markierte RRSets, die übersprungen werden.
     Jeder Lauf mit `-b` legt vor Änderungen ein Zonefile in `zone-backups/` ab. Im
     Notfall lässt sich eine Zone daraus mit `client.zones.import_zonefile(zone,
     zonefile)` vollständig wiederherstellen (ersetzt alle RRSets der Zone).
+
+## Grenzen
+
+- Mindest-TTL 60 Sekunden, keine Obergrenze.
+- Vom Anbieter verwaltet ist nur der SOA-Record.
+- RRSets können ein Schutzflag (`protection.change`) tragen; solche RRSets überspringt
+  der Upload mit einer Warnung und zeigt sie im Vergleich als `!` an.
+- Die Anwendung eines Änderungsplans ist **nicht** atomar.

@@ -18,11 +18,16 @@ DNSJinja/                                    # Tool repository
 ├── src/dnsjinja/                            # Main package source
 │   ├── __init__.py                          # Package exports (DNSJinja, main, explore_main, exit_on_error)
 │   ├── __main__.py                          # Entry point for `python -m dnsjinja`
-│   ├── dnsjinja.py                          # Core class, CLI, and Hetzner Cloud API operations (~270 lines)
-│   ├── dnsjinja_config_schema.py            # JSON Schema (Draft 7) for config validation (~145 lines)
-│   ├── explore_hetzner.py                   # Hetzner zone discovery utility (~75 lines)
-│   ├── exit_on_error.py                     # Cross-process exit code handler (~20 lines)
-│   └── myloadenv.py                         # Multi-path .env file loader (~38 lines)
+│   ├── dnsjinja.py                          # Core class and CLI - backend-neutral
+│   ├── backends/                            # DNS backend layer (the provider-specific part)
+│   │   ├── base.py                          # Neutral types + DNSBackend ABC
+│   │   ├── registry.py                      # Name -> class, builtins + entry points
+│   │   ├── hetzner.py                       # Hetzner Cloud backend (hcloud)
+│   │   └── desec.py                         # deSEC backend (requests)
+│   ├── dnsjinja_config_schema.py            # pydantic v2 models for config validation
+│   ├── explore_dns.py                       # Zone discovery utility (any backend)
+│   ├── exit_on_error.py                     # Cross-process exit code handler
+│   └── myloadenv.py                         # Multi-path .env file loader
 ├── samples/                                 # Sample configuration and templates
 │   ├── dnsjinja.env.sample                  # Environment variable template
 │   ├── dnsjinja.ps1.sample                  # PowerShell wrapper script
@@ -31,10 +36,15 @@ DNSJinja/                                    # Tool repository
 ├── tests/                                   # Test suite (pytest)
 │   ├── __init__.py
 │   ├── conftest.py                          # Fixtures, .env loading, mock helpers
-│   ├── test_unit.py                         # 19 unit tests (fully mocked, no network)
-│   └── test_integration.py                  # 8 integration tests (real Hetzner API)
-├── setup.cfg                                # Package metadata, dependencies, entry points
-├── pyproject.toml                           # Build system + pytest configuration
+│   ├── fake_backend.py                      # In-memory backend used by the offline tests
+│   ├── test_unit.py                         # Unit tests (fully mocked, no network)
+│   ├── test_config_cases.py                 # Rendering per config variant (offline)
+│   ├── test_backends.py                     # Registry and plugin contract
+│   ├── test_backend_hetzner.py              # Hetzner backend against a mocked hcloud client
+│   ├── test_backend_desec.py                # deSEC backend at HTTP level (requests-mock)
+│   ├── test_normalize.py                    # TTL/RDATA normalisation, display-vs-upload parity
+│   └── test_integration.py                  # Integration tests (real API)
+├── pyproject.toml                           # Package metadata, dependencies, entry points, pytest
 ├── requirements.txt                         # Pip dependencies
 ├── README.md                                # Documentation (German)
 └── TODO.md                                  # Planned improvements
@@ -82,37 +92,54 @@ A complete sample data set is provided in `samples/`.
 
 Contains the `DNSJinja` class with all core logic:
 
-- **`DEFAULT_API_BASE`** - Class constant: `https://api.hetzner.cloud/v1`
-- **`__init__(upload, backup, write_zone, datadir, config_file, auth_api_token)`** - Loads config, validates schema, initializes `hcloud.Client`, sets up Jinja2 environment, prepares zones
-- **`_prepare_zones()`** - Syncs configured domains with Hetzner via `client.zones.get_all()`, auto-populates `zone-id`, `zone-file` and stores `BoundZone` objects in `_hetzner_zones`. If `_create_missing` is set, creates missing zones via `client.zones.create(name, mode="primary")`
-- **`_get_zone_serial(domain)`** - Queries SOA serial from Hetzner nameservers via dnspython
+- **`DEFAULT_BACKEND`** - Class constant: `hetzner`
+- **`__init__(upload, backup, write_zone, datadir, config_file, auth_api_token)`** - Loads config, validates schema, resolves the backend, sets up Jinja2 environment, prepares zones
+- **`_resolve_backend(token)`** - Reads `global.dns-backend`, resolves the class through the registry, applies the token precedence (CLI option, `DNSJINJA_<BACKEND>_AUTH_API_TOKEN`, `DNSJINJA_AUTH_API_TOKEN`) and instantiates the backend
+- **`_prepare_zones()`** - Syncs configured domains via `backend.list_zones()`, auto-populates `zone-id`, `zone-file` and stores neutral `Zone` objects in `_zones`. With `_create_missing`, creates missing zones via `backend.create_zone()`
+- **`_parse_zone_rrsets(domain)`** - Parses the rendered zone into the canonical dnsjinja form (relative owner names, `@` for the apex, absolute RDATA). **Must stay backend-free** - `test_config_cases.py` asserts on exactly this form
+- **`_plan_zone_rrsets(domain)`** - Normalises the desired state through `backend.normalize_desired()`, reads the live state through `backend.list_rrsets()` and returns the diff. The single common root of display and upload, which is why normalisation belongs here
+- **`_sync_zone_rrsets(domain)`** - Filters the plan and hands it to `backend.apply_changes()`
+- **`_get_zone_serial(domain)`** - Queries SOA serial from the configured nameservers via dnspython
 - **`_new_zone_serial(domain)`** - Generates SOA serial in `YYYYMMDD##` format (auto-incrementing counter)
 - **`_create_zone_data()`** - Renders all Jinja2 templates into zone file content
 - **`write_zone_files()`** - Writes rendered zones to local files as `{domain}.zone.{serial}`
-- **`upload_zone(domain)`** - Imports zone data via `client.zones.import_zonefile(zone, zonefile)`
+- **`upload_zone(domain)`** - Applies the change plan; reports skipped RRSets instead of claiming plain success
 - **`upload_zones()`** - Uploads all configured zones, continues on individual failures
-- **`backup_zone(domain)`** - Exports zone data via `client.zones.export_zonefile(zone)`
+- **`backup_zone(domain)`** - Exports zone data via `backend.export_zonefile(zone)`
 - **`backup_zones()`** - Backs up all configured zones
 
 Custom exception: `UploadError` - raised on upload failure, writes exit code 254 to temp file.
 
 CLI function `run()` uses Click with options for `--datadir`, `--config`, `--upload`, `--backup`, `--write`, `--create-missing`, `--auth-api-token`.
 
+### `backends/` - DNS Backend Layer
+
+Everything provider-specific lives here; the core knows only the neutral types.
+
+- **`base.py`** - `RRSet`, `Zone`, `RRSetChange`, `ApplyResult`, `BackendCapabilities`, the `BackendError` hierarchy, and the `DNSBackend` ABC. Also the concrete normalisation (`normalize_desired`, `canonicalize_rdata`, `effective_min_ttl`) that every backend inherits.
+- **`registry.py`** - Resolves a name to a class: builtins first (lazily imported), then the `dnsjinja.backends` entry point group. A broken plugin is logged and skipped. `config.json` never names a module path.
+- **`hetzner.py`** - hcloud-based. Per-RRSet action endpoints, so `apply_changes()` is a loop and not atomic; a failed delete lands in `ApplyResult.skipped`.
+- **`desec.py`** - requests-based. `apply_changes()` builds one atomic bulk PATCH. Owns the apex wire-form conversion (`@` <-> `""`), cursor pagination and 429 handling.
+
+The contract: `apply_changes()` is the only writing entry point and receives the **complete** plan. That is what lets both API shapes live behind one interface.
+
 ### `dnsjinja_config_schema.py` - Config Schema
 
-Defines `DNSJINJA_JSON_SCHEMA` (JSON Schema Draft 7) with two sections:
-- **`global`** (required fields): `zone-files`, `zone-backups`, `templates` (directories), `name-servers` (IPv4 array). Optional: `dns-api-base` (URI, defaults to `https://api.hetzner.cloud/v1`)
-- **`domains`**: Object keyed by domain name, each with `template` (required), `zone-file` (optional). Additional properties allowed for template variables.
+pydantic v2 models (`DnsJinjaConfig`, `GlobalConfig`, `DomainConfig`), all with `extra='allow'`:
+- **`global`** (required): `zone-files`, `zone-backups`, `templates`, `name-servers`. Optional: `dns-backend` (default `hetzner`), `dns-api-base` (default: the backend's own), `backend-options`.
+- **`domains`**: Object keyed by domain name, each with `template` (required). Additional properties allowed for template variables.
 
-Note: `zone-id` and `zone-file` are auto-populated by `_prepare_zones()` from the Hetzner Cloud API at runtime.
+Note: `model_validate()` result is discarded in `DNSJinja.__init__`; the code reads the raw dict, so **schema defaults must be repeated at the read site**.
 
-### `explore_hetzner.py` - Zone Discovery
+`zone-id` and `zone-file` are auto-populated by `_prepare_zones()` at runtime.
 
-`ExploreHetzner` class fetches all zones via `hcloud.Client.zones.get_all()` and outputs a JSON config template. Accepts optional `api_base` parameter. Useful for initial project setup.
+### `explore_dns.py` - Zone Discovery
+
+`ExploreDNS` fetches all zones through `backend.list_zones()` and outputs a JSON config template. `-B/--dns-backend` picks the backend, `--list-backends` shows what is available. The old command name `explore_hetzner` remains as an alias.
 
 ### `myloadenv.py` - Environment Loader
 
-`load_env()` searches multiple platform-aware paths for `.env` and `{module}.env` files using `appdirs` and `python-dotenv`. Paths include `~/`, `~/.config/`, `~/.dnsjinja/`, user config dir, and CWD.
+`load_env()` searches multiple platform-aware paths for `.env` and `{module}.env` files using `platformdirs` and `python-dotenv`. Paths include `~/`, `~/.config/`, `~/.dnsjinja/`, user config dir, and CWD.
 
 ### `exit_on_error.py` - Exit Code Handler
 
@@ -124,21 +151,30 @@ Reads exit code from `{tempdir}/dnsjinja.exit.txt` and calls `sys.exit()` with t
 |---------|---------|
 | Jinja2 | Template rendering for zone files |
 | hcloud | Official Hetzner Cloud Python client (zones API) |
+| requests | HTTP client for the deSEC backend |
 | dnspython | DNS resolver for SOA serial queries |
 | Click | CLI framework with env var support |
 | python-dotenv | .env file loading |
-| jsonschema | Config validation against JSON Schema |
-| appdirs | Cross-platform config directory detection |
+| pydantic | Config validation |
+| platformdirs | Cross-platform config directory detection |
 
 ## CLI Commands & Environment Variables
 
-### Entry Points (defined in `setup.cfg`)
+### Entry Points (defined in `pyproject.toml`)
 
 | Command | Entry Point | Purpose |
 |---------|-------------|---------|
 | `dnsjinja` | `dnsjinja:main` | Main CLI - backup, write, upload zones |
-| `explore_hetzner` | `dnsjinja:explore_main` | Discover Hetzner zones, generate config template |
+| `explore_dns` | `dnsjinja:explore_main` | Discover zones, generate config template |
+| `explore_hetzner` | `dnsjinja:explore_main` | Alias for `explore_dns` |
 | `exit_on_error` | `dnsjinja:exit_on_error` | Check and propagate exit codes |
+
+Backends are entry points too, in group `dnsjinja.backends`:
+
+| Name | Entry Point |
+|------|-------------|
+| `hetzner` | `dnsjinja.backends.hetzner:HetznerBackend` |
+| `desec` | `dnsjinja.backends.desec:DesecBackend` |
 
 ### `dnsjinja` Options
 
@@ -146,19 +182,24 @@ Reads exit code from `{tempdir}/dnsjinja.exit.txt` and calls `sys.exit()` with t
 |--------|---------|---------|-------------|
 | `-d`, `--datadir` | `.` | `DNSJINJA_DATADIR` | Base directory for templates and config |
 | `-c`, `--config` | `config/config.json` | `DNSJINJA_CONFIG` | Configuration file path |
-| `-u`, `--upload` | `False` | - | Upload zones to Hetzner |
-| `-b`, `--backup` | `False` | - | Backup zones from Hetzner |
+| `-u`, `--upload` | `False` | - | Upload zones to the backend |
+| `-b`, `--backup` | `False` | - | Backup zones from the backend |
 | `-w`, `--write` | `False` | - | Write zone files locally |
-| `-C`, `--create-missing` | `False` | - | Create zones at Hetzner that are configured but not yet present |
-| `--auth-api-token` | `""` | `DNSJINJA_AUTH_API_TOKEN` | Bearer token for Hetzner Cloud API |
+| `-C`, `--create-missing` | `False` | - | Create zones that are configured but not yet present |
+| `--auth-api-token` | `""` | `DNSJINJA_AUTH_API_TOKEN` | API token; `DNSJINJA_<BACKEND>_AUTH_API_TOKEN` takes precedence over the general variable |
+| `--dry-run` | `False` | - | Render and print zone files, write and upload nothing |
+| `--dry-run-compare` | `False` | - | Show live-vs-template differences, change nothing |
+| `--show-ttl` | `False` | - | With `--dry-run-compare`, also list TTL-only differences |
 
-### `explore_hetzner` Options
+### `explore_dns` Options
 
 | Option | Default | Env Var | Description |
 |--------|---------|---------|-------------|
 | `-o`, `--output` | stdout | - | Output file for results |
-| `--auth-api-token` | `""` | `DNSJINJA_AUTH_API_TOKEN` | Bearer token for Hetzner Cloud API |
-| `--api-base` | `""` | `DNSJINJA_API_BASE` | Base URL of Hetzner Cloud API |
+| `-B`, `--dns-backend` | `hetzner` | `DNSJINJA_DNS_BACKEND` | Backend to query |
+| `--auth-api-token` | `""` | `DNSJINJA_AUTH_API_TOKEN` | API token for the backend |
+| `--api-base` | `""` | `DNSJINJA_API_BASE` | Base URL of the API |
+| `--list-backends` | `False` | - | List available backends and exit |
 
 ## Configuration Format
 
@@ -188,7 +229,9 @@ All domain config fields are passed to templates as Jinja2 variables via `**kwar
 | `zone-backups` | yes | - | Directory for zone backups |
 | `templates` | yes | - | Directory for Jinja2 templates |
 | `name-servers` | yes | - | IPv4 addresses for SOA serial queries |
-| `dns-api-base` | no | `https://api.hetzner.cloud/v1` | Base URL of the Hetzner Cloud API |
+| `dns-backend` | no | `hetzner` | DNS backend name (`hetzner`, `desec`, or a plugin) |
+| `dns-api-base` | no | the backend's own | Base URL of the API |
+| `backend-options` | no | `{}` | Backend-specific settings (e.g. `timeout`, `rate-limit-retries`) |
 
 ### Example
 
@@ -227,21 +270,26 @@ DNSJinja uses the official [hcloud-python](https://github.com/hetznercloud/hclou
 
 ### hcloud Client Methods Used
 
-| Operation | hcloud Method |
-|-----------|---------------|
-| List zones | `client.zones.get_all()` |
-| Import zone | `client.zones.import_zonefile(zone, zonefile)` |
-| Export zone | `client.zones.export_zonefile(zone)` |
+| Operation | Hetzner (hcloud) | deSEC |
+|-----------|------------------|-------|
+| List zones | `client.zones.get_all()` | `GET /domains/` |
+| Create zone | `client.zones.create(name, mode="primary")` | `POST /domains/` |
+| Export zone | `client.zones.export_zonefile(zone)` | `GET /domains/{name}/zonefile/` |
+| Import zone | `client.zones.import_zonefile(zone, zonefile)` | only when creating a domain |
+| List RRSets | `client.zones.get_rrset_all(zone)` | `GET /domains/{name}/rrsets/` (cursor) |
+| Apply changes | `create_rrset` / `set_rrset_records` + `change_rrset_ttl` / `delete_rrset`, one call each | one atomic `PATCH /domains/{name}/rrsets/` |
 
-The `hcloud.Client` is initialised with the API token and optional `api_endpoint` (from `dns-api-base` config). The API token is created in the Hetzner Cloud Console (not the old dns.hetzner.com portal).
+Both are reached only through `DNSBackend`; `dnsjinja.py` calls neither library directly.
+Hetzner tokens come from the Cloud Console (not the old dns.hetzner.com portal), deSEC
+tokens from Token Management. deSEC uses `Authorization: Token <secret>`, not Bearer.
 
 ## Workflow
 
 The main CLI executes three phases in order (each gated by its flag):
 
-1. **Backup** (`-b`): Downloads current zones from Hetzner Cloud API, saves as `{zone-file}.{serial}` in `zone-backups/`
+1. **Backup** (`-b`): Exports current zones through the backend, saves as `{zone-file}.{serial}` in `zone-backups/`
 2. **Write** (`-w`): Renders Jinja2 templates for each domain, writes as `{zone-file}.{serial}` in `zone-files/`
-3. **Upload** (`-u`): POSTs rendered zone content to Hetzner Cloud API for each domain
+3. **Upload** (`-u`): Plans the diff and hands it to `backend.apply_changes()` for each domain
 
 On initialization, `_prepare_zones()` always runs to sync configured domains against Hetzner's zone list (with pagination) and warn about mismatches.
 
@@ -296,8 +344,21 @@ standard.tpl (entry point per domain)
 
 ### Adding a New Provider
 
+Note: "provider" here means a **service provider at template level** (mail, www, xmpp, ns,
+soa). Which API the zones are uploaded through is a separate concept - the **backend**,
+selected by `global.dns-backend`. Do not conflate the two.
+
 1. Create `include/<category>/<category>_<name>.inc` (e.g. `include/mail/mail_newprovider.inc`)
 2. Reference it in domain config: `"mail": "newprovider"`
+
+### Adding a New Backend
+
+1. Subclass `dnsjinja.backends.DNSBackend`, implement `list_zones()`, `create_zone()`,
+   `export_zonefile()`, `list_rrsets()`, `apply_changes()`, and declare `BackendCapabilities`
+2. Map every provider exception onto the `BackendError` hierarchy - no foreign exception
+   may leave a backend
+3. Register it under the `dnsjinja.backends` entry point group (in-tree: also add it to
+   `_BUILTIN` in `registry.py`)
 
 ### Adding Custom Records for a Domain
 
@@ -356,7 +417,7 @@ Usage: `docker compose run --rm dnsjinja -b -w -u`
 | `DNSJINJA_DATADIR` | `/data` | set in compose |
 | `DNSJINJA_CONFIG` | `/data/config/config.json` | set in compose |
 
-The `ENTRYPOINT` is `dnsjinja`. To run `explore_hetzner`, use `--entrypoint explore_hetzner`.
+The `ENTRYPOINT` is `dnsjinja`. To run `explore_dns`, use `--entrypoint explore_dns`.
 
 ## Coding Conventions
 

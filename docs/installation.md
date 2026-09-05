@@ -3,7 +3,7 @@
 `dnsjinja` läuft mit einem aktuellen Python (≥ 3.10). Bei der Installation per `pip`
 werden alle Abhängigkeiten (Jinja2, hcloud, dnspython, Click, pydantic …) automatisch
 mitinstalliert. Nach der Installation stehen drei Kommandos zur Verfügung:
-`dnsjinja`, `explore_hetzner` und `exit_on_error`.
+`dnsjinja`, `explore_dns` und `exit_on_error`.
 
 ## Virtuelle Python-Umgebung (empfohlen)
 
@@ -104,11 +104,11 @@ docker run --rm \
   dnsjinja -b -w -u
 ```
 
-Da der `ENTRYPOINT` auf `dnsjinja` gesetzt ist, wird `explore_hetzner` über
+Da der `ENTRYPOINT` auf `dnsjinja` gesetzt ist, wird `explore_dns` über
 `--entrypoint` aufgerufen:
 
 ```bash
-docker compose run --rm --entrypoint explore_hetzner dnsjinja --auth-api-token <token>
+docker compose run --rm --entrypoint explore_dns dnsjinja --auth-api-token <token>
 ```
 
 ## Installation prüfen

@@ -1,5 +1,5 @@
 site_name: dnsjinja
-site_description: Modulare Verwaltung von DNS-Zonen bei Hetzner mit Jinja2-Templates
+site_description: Modulare Verwaltung von DNS-Zonen mit Jinja2-Templates
 site_author: Kai Jendrian
 
 # site_url an den eigenen Webserver anpassen. mike legt die Doku in
@@ -82,5 +82,8 @@ nav:
   - Template-Architektur: templates.md
   - "Beispiel: Domain zusammensetzen": beispiel.md
   - CLI-Referenz: cli.md
-  - Hetzner Cloud API: hetzner-api.md
+  - DNS-Backends:
+    - Überblick: dns-backends.md
+    - Hetzner Cloud: backend-hetzner.md
+    - deSEC: backend-desec.md
   - GitHub Actions: github-actions.md

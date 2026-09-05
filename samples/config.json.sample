@@ -1,5 +1,6 @@
 {
   "global": {
+    "dns-backend": "hetzner",
     "zone-files": "zone-files",
     "zone-backups": "zone-backups",
     "templates": "templates",

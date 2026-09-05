@@ -1,9 +1,10 @@
 # dnsjinja
 
 `dnsjinja` erzeugt aus modularen [Jinja2](https://palletsprojects.com/p/jinja/)-Templates
-Bind9-kompatible Zone-Files und spielt diese über die
-[Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions)
-als DNS-Zonen ein.
+Bind9-kompatible Zone-Files und spielt diese als DNS-Zonen ein. Über welche API das
+geschieht, entscheidet die Konfiguration: mitgeliefert sind Backends für
+[Hetzner Cloud](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions) und
+[deSEC](https://desec.readthedocs.io/).
 
 Ein einzelnes Haupt-Template genügt für beliebig viele Domains: Welche DNS-Records
 tatsächlich entstehen, steuert eine zentrale Konfigurationsdatei je Domain.
@@ -37,7 +38,7 @@ RFC-5737-Platzhalter-IPs.
 ```mermaid
 flowchart LR
     A[config.json + Templates] -->|dnsjinja rendert| B[Zone-Files]
-    B -->|Upload via Cloud API| C[Hetzner DNS]
+    B -->|Upload via Backend-API| C[DNS-Backend]
     C -->|Backup| D[zone-backups/]
 ```
 

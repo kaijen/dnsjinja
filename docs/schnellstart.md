@@ -44,11 +44,11 @@ mein-dns/
 
 ## 3. Konfiguration aus dem Hetzner-Account erzeugen (optional)
 
-Existieren bereits Zonen bei Hetzner, erzeugt `explore_hetzner` ein Gerüst für die
+Existieren bereits Zonen bei Hetzner, erzeugt `explore_dns` ein Gerüst für die
 `config.json`:
 
 ```bash
-explore_hetzner -o config/config.json
+explore_dns -o config/config.json
 ```
 
 Die Ausgabe enthält alle vorhandenen Domains mit leerem `template`-Feld, das du dann

@@ -3,7 +3,7 @@
 `dnsjinja` ist ein Python-Script, das mit Hilfe von [Jinja](https://palletsprojects.com/p/jinja/) aus modularen
 Template-Dateien Bind9-kompatible Zone-Files erzeugt.
 
-Diese Zone-Files sollten genutzt werden, um die DNS-Konfiguration per [Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions) bei Hetzner einzuspielen.
+Diese Zone-Files werden anschließend über die API des gewählten DNS-Backends eingespielt. Mitgeliefert sind Backends für [Hetzner Cloud](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions) und [deSEC](https://desec.readthedocs.io/); welches benutzt wird, steht in der `config.json`.
 
 ## Installation
 
@@ -41,7 +41,8 @@ Installation von `dnsjinja` in der aktivierten Umgebung:
 pip install git+ssh://git@github.com/kaijen/dnsjinja.git
 ```
 
-Anschließend stehen die Kommandos `dnsjinja`, `explore_hetzner` und `exit_on_error` zur Verfügung.
+Anschließend stehen die Kommandos `dnsjinja`, `explore_dns` und `exit_on_error` zur Verfügung.
+(Der alte Name `explore_hetzner` bleibt als Alias erhalten.)
 
 Die Umgebungsvariablen können in `$HOME/.dnsjinja/dnsjinja.env` konfiguriert werden (siehe `samples/dnsjinja.env.sample`). Ein Beispiel für ein PowerShell-Wrapper-Script findet sich in `samples/dnsjinja.ps1.sample`.
 
@@ -84,12 +85,12 @@ docker run --rm \
   dnsjinja -b -w -u
 ```
 
-#### explore_hetzner im Container
+#### explore_dns im Container
 
-Da der ENTRYPOINT auf `dnsjinja` gesetzt ist, kann `explore_hetzner` über `--entrypoint` aufgerufen werden:
+Da der ENTRYPOINT auf `dnsjinja` gesetzt ist, kann `explore_dns` über `--entrypoint` aufgerufen werden:
 
 ```bash
-docker compose run --rm --entrypoint explore_hetzner dnsjinja --auth-api-token <token>
+docker compose run --rm --entrypoint explore_dns dnsjinja --auth-api-token <token>
 ```
 
 #### PowerShell-Funktionen für `$PROFILE`
@@ -124,11 +125,11 @@ function Invoke-DNSJinjaDev {
 function Invoke-ExploreHetzner {
     <#
     .SYNOPSIS
-        Führt explore_hetzner im Docker-Container aus.
+        Führt explore_dns im Docker-Container aus.
     .EXAMPLE
         Invoke-ExploreHetzner -o config.json
     #>
-    docker compose -f "$env:DNSJINJA_COMPOSE\docker-compose.yml" run --rm --entrypoint explore_hetzner dnsjinja @args
+    docker compose -f "$env:DNSJINJA_COMPOSE\docker-compose.yml" run --rm --entrypoint explore_dns dnsjinja @args
 }
 
 Set-Alias -Name dnsjinja -Value Invoke-DNSJinja
@@ -178,7 +179,7 @@ pytest -m "not integration" -v
 
 ### Integrationstests ausführen
 
-Die Integrationstests kommunizieren mit der echten Hetzner Cloud API. Folgende Umgebungsvariablen müssen gesetzt sein:
+Die Integrationstests kommunizieren mit der echten API des Backends. Folgende Umgebungsvariablen müssen gesetzt sein:
 
 | Variable | Beschreibung |
 |----------|-------------|
@@ -217,7 +218,7 @@ in `$HOME/.dnsjinja/dnsjinja.env` gesetzt.
 > dnsjinja --help
 Usage: dnsjinja [OPTIONS]
 
-  Modulare Verwaltung von DNS-Zonen (Hetzner Cloud API)
+  Modulare Verwaltung von DNS-Zonen (Backend über config.json wählbar)
 
 Options:
   -d, --datadir TEXT     Basisverzeichnis für Templates und Konfiguration
@@ -227,34 +228,17 @@ Options:
   -u, --upload           Upload der Zonen
   -b, --backup           Backup der Zonen
   -w, --write            Zone-Files schreiben
-  -C, --create-missing   Konfigurierte Domains, die bei Hetzner nicht
+  -C, --create-missing   Konfigurierte Domains, die beim Backend nicht
                          existieren, neu anlegen
-  --auth-api-token TEXT  API-Token (Bearer) für Hetzner Cloud API
-                         (DNSJINJA_AUTH_API_TOKEN)
-```
-
-Das API-Token (Bearer) wird in der [Hetzner Cloud Console](https://console.hetzner.cloud/) im jeweiligen Projekt erstellt.
-Alte `Auth-API-Token` von `dns.hetzner.com` funktionieren nicht mehr.
-Das Token wird bei Bedarf abgefragt und ist sicher abzulegen.
-
-Mit dem Flag `-C` / `--create-missing` werden Domains, die in der Konfiguration vorhanden aber noch nicht bei Hetzner eingerichtet sind, automatisch als primäre Zone neu angelegt. Ohne dieses Flag werden solche Domains wie bisher mit einer Warnung übersprungen.
-
-Eine so neu angelegte Domäne ist noch nicht registriert und delegiert, ihre Nameserver antworten also mit `REFUSED`. dnsjinja gibt in diesem Fall eine Warnung aus und startet die SOA-Seriennummer bei `JJJJMMTT01`, statt den Lauf abzubrechen.
-
-Eine Vorlage für eine `config.json` kann mithilfe von `explore_hetzner` aus einem existieren Hetzner-Account erstellt werden.
-`explore_hetzner` wird bei der Installation mit `pip` ebenfalls erzeugt.
-
-```
-> explore_hetzner --help
-Usage: explore_hetzner [OPTIONS]
-
-  Explore Hetzner DNS Zones (Cloud API)
-
-Options:
-  -o, --output FILENAME  Ausgabedatei für die Ergebnisse
-  --auth-api-token TEXT  API-Token (Bearer) für Hetzner Cloud API
-                         (DNSJINJA_AUTH_API_TOKEN)
-  --api-base TEXT        Basis-URL der Hetzner Cloud API (DNSJINJA_API_BASE)
+  --auth-api-token TEXT  API-Token für das DNS-Backend
+                         (DNSJINJA_AUTH_API_TOKEN, oder
+                         DNSJINJA_<BACKEND>_AUTH_API_TOKEN)
+  --dry-run              Zone-Files rendern und ausgeben, ohne zu schreiben
+                         oder hochzuladen
+  --dry-run-compare      Unterschiede zwischen Live-Daten des Backends und
+                         Templates anzeigen, ohne etwas zu ändern
+  --show-ttl             Bei --dry-run-compare auch reine TTL-Abweichungen
+                         auflisten
   --help                 Show this message and exit.
 ```
 
@@ -303,7 +287,9 @@ Der Abschnitt `global` definiert die Infrastruktur-Einstellungen:
 | `zone-backups` | ja | Verzeichnis für Zone-Backups |
 | `templates` | ja | Verzeichnis für Jinja2-Templates |
 | `name-servers` | ja | Liste der Nameserver-IPs für SOA-Abfragen |
-| `dns-api-base` | nein | Basis-URL der Hetzner Cloud API (Standard: `https://api.hetzner.cloud/v1`) |
+| `dns-backend` | nein | DNS-Backend, `hetzner` oder `desec` (Standard: `hetzner`) |
+| `dns-api-base` | nein | Basis-URL der API (Standard: die des gewählten Backends) |
+| `backend-options` | nein | Objekt mit backendspezifischen Schaltern |
 
 ### Abschnitt `domains`
 
@@ -319,7 +305,7 @@ Jeder Eintrag im Abschnitt `domains` definiert eine zu verwaltende Domain. Der S
 | `subdomains` | nein | Array | Liste der Subdomains, die als eigene Zonen verarbeitet werden |
 | `custom_groups` | nein | Array | Liste gemeinsamer Konfigurationsgruppen |
 
-Die Felder `zone-id` und `zone-file` werden automatisch durch Abgleich mit der Hetzner Cloud API befüllt.
+Die Felder `zone-id` und `zone-file` werden automatisch durch Abgleich mit dem Backend befüllt.
 
 Alle konfigurierten Felder werden als Jinja2-Variablen an die Templates übergeben.
 
@@ -452,35 +438,58 @@ Im Unterverzeichnis `samples/` findet sich ein vollständiger Beispiel-Datensatz
 
 Die Beispiele verwenden ausschließlich abstrakte Daten (`example.com`, `198.51.100.x` etc.) und können als Ausgangspunkt für eine eigene Konfiguration dienen.
 
-## Hetzner Cloud API
+## DNS-Backends
 
-`dnsjinja` nutzt die offizielle Python-Bibliothek [hcloud-python](https://github.com/hetznercloud/hcloud-python) für die Kommunikation mit der [Hetzner Cloud API](https://docs.hetzner.cloud/reference/cloud#tag/zone-actions). HTTP-Aufrufe, Authentifizierung und Paginierung werden von der Bibliothek übernommen. Die Basis-URL (`https://api.hetzner.cloud/v1`) kann über `dns-api-base` in der Konfiguration oder die Umgebungsvariable `DNSJINJA_API_BASE` überschrieben werden.
+Welchen Anbieter `dnsjinja` anspricht, entscheidet `global.dns-backend` in der `config.json`.
+Ohne Angabe gilt `hetzner`, bestehende Konfigurationen bleiben also unverändert gültig.
+`explore_dns --list-backends` zeigt die verfügbaren Namen.
 
-Verwendete hcloud-Methoden:
+| | Hetzner | deSEC |
+|---|---|---|
+| Adressierung der Zone | numerische ID | Domainname |
+| Mindest-/Höchst-TTL | 60 / – | 3600 / 86400 |
+| Änderungen schreiben | eine Aktion je RRSet | ein atomarer Sammelaufruf |
+| Vom Anbieter verwaltet | SOA | SOA + alle DNSSEC-Typen |
+| RRSet-Schutzflag | ja | nein (Token-Policies) |
+| Zonefile-Import in bestehende Zone | ja | nein |
+| DNSSEC | selbst verwalten | automatisch signiert |
 
-| Operation | hcloud-Methode | Beschreibung |
-|-----------|----------------|--------------|
-| Zonen auflisten | `client.zones.get_all()` | Alle Zonen abrufen |
-| Zone neu anlegen | `client.zones.create(name, mode="primary")` | `--create-missing` |
-| Zone exportieren | `client.zones.export_zonefile(zone)` | Backup (`-b`) |
-| RRSets lesen | `client.zones.get_rrset_all(zone)` | Soll-/Ist-Abgleich beim Upload |
-| RRSet anlegen/ändern | `client.zones.create_rrset(...)` / `set_rrset_records(...)` | Upload (`-u`) |
-| RRSet löschen | `client.zones.delete_rrset(rrset)` | Upload (`-u`), veraltete Records |
-| TTL ändern | `client.zones.change_rrset_ttl(...)` | Upload (`-u`) |
-| Zone importieren | `client.zones.import_zonefile(zone, zonefile)` | Restore aus Backup |
+**Hetzner** nutzt die offizielle Bibliothek [hcloud-python](https://github.com/hetznercloud/hcloud-python);
+HTTP-Aufrufe, Authentifizierung und Paginierung übernimmt sie. Der Token wird in der Hetzner
+Cloud Console erstellt – nicht der alte Auth-API-Token von dns.hetzner.com.
+
+**deSEC** spricht die API direkt an. Der komplette Änderungsplan geht als ein atomarer
+`PATCH` an `/domains/{name}/rrsets/`; die Cursor-Paginierung und die Ratenlimits (429 mit
+`Retry-After`) behandelt das Backend selbst. Weil deSEC eine Mindest-TTL von 3600 erzwingt,
+die Templates aber `$TTL 300` setzen, hebt `dnsjinja` zu niedrige TTLs vor dem Vergleich an
+und warnt. Ein Restore aus dem Backup ist bei deSEC kein Routinevorgang: Ein Zonefile nimmt
+die API nur beim Anlegen einer Domain entgegen.
 
 Der **Upload** (`-u`) arbeitet auf Record-Ebene (*RRSet-Sync*): Das gerenderte Zone-File wird
 mit [dnspython](https://www.dnspython.org/) validiert, anschließend werden fehlende RRSets
 angelegt, geänderte aktualisiert und **Records, die nicht mehr im Template stehen, gelöscht**.
-Der SOA-Record (von Hetzner verwaltet) und als *protected* markierte RRSets werden dabei
-übersprungen. `import_zonefile` wird nicht für den Upload, sondern für ein vollständiges
-Restore aus einem Backup verwendet.
+Vom Anbieter verwaltete Typen und als *protected* markierte RRSets werden übersprungen.
 
-Der API-Token wird über die Hetzner Cloud Console erstellt (nicht der alte Auth-API-Token von dns.hetzner.com).
+Der Token kommt aus `--auth-api-token`, `DNSJINJA_<BACKEND>_AUTH_API_TOKEN` oder
+`DNSJINJA_AUTH_API_TOKEN` – in dieser Reihenfolge.
+
+### Eigene Backends
+
+Fremde Pakete melden ein Backend über die Entry-Point-Gruppe `dnsjinja.backends`:
+
+```toml
+[project.entry-points."dnsjinja.backends"]
+meinanbieter = "meinpaket.backend:MeinBackend"
+```
+
+Die Klasse erbt von `dnsjinja.backends.DNSBackend` und implementiert `list_zones()`,
+`create_zone()`, `export_zonefile()`, `list_rrsets()` und `apply_changes()`. Die `config.json`
+nennt ausschließlich Namen, nie einen Modulpfad – eine Konfigurationsdatei soll nicht
+entscheiden, welcher Code ausgeführt wird.
 
 ## GitHub Actions
 
-`dnsjinja` kann über GitHub Actions automatisiert werden. Dabei wird ein Workflow im Daten-Repository eingerichtet, der bei jedem Push auf `main` die DNS-Zonen erzeugt und über die Hetzner Cloud API einspielt:
+`dnsjinja` kann über GitHub Actions automatisiert werden. Dabei wird ein Workflow im Daten-Repository eingerichtet, der bei jedem Push auf `main` die DNS-Zonen erzeugt und über die Backend-API einspielt:
 
 1. `dnsjinja` wird aus dem Tool-Repository installiert
 2. Das Daten-Repository wird ausgecheckt
@@ -489,7 +498,7 @@ Der API-Token wird über die Hetzner Cloud Console erstellt (nicht der alte Auth
 5. Der Exit-Status wird über `exit_on_error` geprüft
 
 Benötigte GitHub Secrets und Variables:
-- `HETZNER_API_AUTH_TOKEN` (Secret) - Bearer-Token aus Hetzner Cloud Console
+- `HETZNER_API_AUTH_TOKEN` (Secret) - API-Token des DNS-Backends
 - `GH_PAT_DNSJINJA` (Secret) - GitHub PAT für Installation von dnsjinja aus privatem Repository
 - `DNSJINJA` (Variable) - Repository-Pfad des dnsjinja-Tools
 - `DNSDATA` (Variable) - Repository-Pfad der DNS-Daten

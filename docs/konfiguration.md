@@ -13,7 +13,9 @@ Infrastruktur-Einstellungen, die für alle Domains gelten:
 | `zone-backups` | ja | Verzeichnis für Zone-Backups |
 | `templates` | ja | Verzeichnis der Jinja2-Templates |
 | `name-servers` | ja | Liste von Nameserver-IPs für die SOA-Seriennummern-Abfrage |
-| `dns-api-base` | nein | Basis-URL der Hetzner Cloud API (Standard: `https://api.hetzner.cloud/v1`) |
+| `dns-backend` | nein | DNS-Backend, `hetzner` oder `desec` (Standard: `hetzner`) |
+| `dns-api-base` | nein | Basis-URL der API (Standard: die des gewählten Backends) |
+| `backend-options` | nein | Objekt mit backendspezifischen Schaltern, siehe [DNS-Backends](dns-backends.md) |
 
 Pfade werden relativ zum `--datadir` aufgelöst. Die `name-servers` werden benutzt, um
 die aktuelle SOA-Seriennummer einer Zone zu ermitteln und hochzuzählen.
@@ -21,8 +23,12 @@ die aktuelle SOA-Seriennummer einer Zone zu ermitteln und hochzuzählen.
 Antwortet keiner der Nameserver – etwa bei einer mit `--create-missing` frisch
 angelegten Domäne, die noch nicht registriert bzw. delegiert ist – gibt dnsjinja eine
 Warnung aus und startet die Seriennummer bei `JJJJMMTT01`. Der Lauf bricht deswegen
-nicht ab; die SOA-Seriennummer verwaltet ohnehin Hetzner selbst, dnsjinja lädt sie
+nicht ab; die SOA-Seriennummer verwaltet ohnehin der Anbieter selbst, dnsjinja lädt sie
 nicht hoch.
+
+Welches Backend `dnsjinja` anspricht, steht in `dns-backend`. Ohne Angabe gilt
+`hetzner`, bestehende Konfigurationen bleiben also unverändert gültig. Die Unterschiede
+zwischen den Backends beschreibt [DNS-Backends](dns-backends.md).
 
 ## Abschnitt `domains`
 
@@ -40,12 +46,17 @@ Jeder Schlüssel ist ein Domain-Name, der Wert ein Objekt:
 | `ns` | nein | String | NS-Provider-Override → `include/ns/ns_<wert>.inc` (Standard: `hetzner`) |
 | `soa` | nein | String | SOA-Provider-Override → `include/soa/soa_<wert>.inc` (Standard: `hetzner`) |
 
+!!! warning "`ns`/`soa` folgen dem Backend nicht automatisch"
+    `ns` und `soa` wählen Templates, `dns-backend` wählt die API. Wer auf deSEC
+    umstellt, setzt zusätzlich `"ns": "desec"` und `"soa": "desec"` je Domain – sonst
+    rendern die Templates weiterhin Hetzner-Nameserver.
+
 Alle konfigurierten Felder werden zusätzlich als Jinja2-Variablen an die Templates
 übergeben und sind dort direkt verwendbar.
 
 !!! note "Automatisch befüllte Felder"
-    Die Felder `zone-id` und `zone-file` werden zur Laufzeit durch Abgleich mit der
-    Hetzner Cloud API gesetzt – sie gehören **nicht** in die `config.json`.
+    Die Felder `zone-id` und `zone-file` werden zur Laufzeit durch Abgleich mit dem
+    Backend gesetzt – sie gehören **nicht** in die `config.json`.
 
 ## Beispiel
 
